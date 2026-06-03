@@ -7,6 +7,9 @@ import { createInitialState } from '../state/initialState';
 import {
   canRefillCustomerBatch,
   craftExcuse,
+  getWaitingCustomerByInstanceId,
+  getWantedExcuseIds,
+  hasMatchingStock,
   refillCustomerBatch,
   serveCustomerByInstanceId,
 } from '../systems/gameplay';
@@ -114,6 +117,8 @@ export class FactoryScene extends Phaser.Scene {
     const panel = addPanel(this, layout.customerQueue, colors.panelAlt, 14);
     const inner = inset(layout.customerQueue, layout.compact ? 8 : 11);
     const serveButtonWidth = layout.compact ? 72 : 118;
+    const statusX = inner.x + (layout.compact ? 86 : 126);
+    const statusWidth = inner.width - serveButtonWidth - (statusX - inner.x) - 8;
     const heading = addLabel(
       this,
       'Customer Queue',
@@ -123,6 +128,16 @@ export class FactoryScene extends Phaser.Scene {
       '#2b2018',
       inner.width - serveButtonWidth - 8,
     );
+    const serveStatus = addLabel(
+      this,
+      this.getServeStatusText(),
+      statusX,
+      inner.y + (layout.compact ? 4 : 5),
+      layout.compact ? 9 : 10,
+      this.getSelectedCustomer() ? '#2b2018' : '#74594c',
+      statusWidth,
+    );
+    serveStatus.setFontStyle('700');
     const serveAction = this.renderServeAction(
       {
         x: inner.x + inner.width - serveButtonWidth,
@@ -149,7 +164,7 @@ export class FactoryScene extends Phaser.Scene {
       );
     });
 
-    this.addToUi(panel, heading, ...serveAction, ...slots);
+    this.addToUi(panel, heading, serveStatus, ...serveAction, ...slots);
   }
 
   private renderServeAction(rect: Rect, compact: boolean): Phaser.GameObjects.GameObject[] {
@@ -251,10 +266,26 @@ export class FactoryScene extends Phaser.Scene {
     const title = definition.displayName;
     const wanted = excuses[customer.wantedExcuseId].displayName;
     const name = addLabel(this, title, rect.x + 10, rect.y + 6, compact ? 11 : 13, '#2b2018', rect.width * 0.58);
-    const want = addLabel(this, `ต้องการ: ${wanted}`, rect.x + rect.width * 0.56, rect.y + 6, compact ? 10 : 12, '#74594c', rect.width * 0.42);
+    const want = addLabel(
+      this,
+      selected ? 'เลือกแล้ว' : `ต้องการ: ${wanted}`,
+      rect.x + rect.width * 0.56,
+      rect.y + 6,
+      compact ? 10 : 12,
+      selected ? '#d97706' : '#74594c',
+      rect.width * 0.42,
+    );
     want.setFontStyle('700');
-    const status = addLabel(this, this.getCustomerStatus(definition), rect.x + 10, rect.y + rect.height - (compact ? 17 : 20), compact ? 9 : 11, '#74594c', rect.width - 20);
-    status.setFontStyle('500');
+    const status = addLabel(
+      this,
+      selected ? `ต้องการ: ${wanted}` : this.getCustomerStatus(definition),
+      rect.x + 10,
+      rect.y + rect.height - (compact ? 17 : 20),
+      compact ? 9 : 11,
+      selected ? '#2b2018' : '#74594c',
+      rect.width - 20,
+    );
+    status.setFontStyle(selected ? '800' : '500');
     const hitArea = this.add.zone(rect.x, rect.y, rect.width, rect.height)
       .setOrigin(0)
       .setInteractive({ useHandCursor: true });
@@ -313,7 +344,7 @@ export class FactoryScene extends Phaser.Scene {
       const y = cardTop + index * (cardHeight + cardGap);
       return this.renderExcuseCard(
         { x: inner.x, y, width: inner.width, height: cardHeight },
-        excuse.displayName,
+        id,
         this.state.excuseStock[id],
         excuse.maxStock,
         layout.compact,
@@ -323,12 +354,17 @@ export class FactoryScene extends Phaser.Scene {
     this.addToUi(panel, heading, ...cards);
   }
 
-  private renderExcuseCard(rect: Rect, label: string, stock: number, maxStock: number, compact: boolean): Phaser.GameObjects.GameObject[] {
-    const bg = addPanel(this, rect, colors.panel, 10);
+  private renderExcuseCard(rect: Rect, excuseId: ExcuseId, stock: number, maxStock: number, compact: boolean): Phaser.GameObjects.GameObject[] {
+    const selectedWants = this.selectedCustomerWants(excuseId);
+    const ready = selectedWants && stock > 0;
+    const bg = addPanel(this, rect, ready ? colors.panelServed : selectedWants ? colors.panelNeeded : colors.panel, 10);
+    const border = selectedWants ? this.addCueBorder(rect, ready) : undefined;
+    const label = excuses[excuseId].displayName;
+    const countPrefix = selectedWants ? ready ? 'พร้อม' : 'ต้องใช้' : 'Stock';
     const title = addLabel(this, label, rect.x + 10, rect.y + (compact ? 6 : 7), compact ? 11 : 13, '#2b2018', rect.width * 0.55);
-    const count = addLabel(this, `Stock ${stock}/${maxStock}`, rect.x + rect.width * 0.62, rect.y + (compact ? 6 : 7), compact ? 10 : 12, '#74594c', rect.width * 0.35);
+    const count = addLabel(this, `${countPrefix} ${stock}/${maxStock}`, rect.x + rect.width * 0.58, rect.y + (compact ? 6 : 7), compact ? 10 : 12, selectedWants ? '#2b2018' : '#74594c', rect.width * 0.39);
     count.setFontStyle('700');
-    return [bg, title, count];
+    return [bg, ...(border ? [border] : []), title, count];
   }
 
   private renderCraftPanel(layout: FactoryLayout): void {
@@ -339,14 +375,22 @@ export class FactoryScene extends Phaser.Scene {
     const buttonTop = inner.y + (layout.compact ? 22 : 30);
     const buttonHeight = Math.max(33, Math.min(44, Math.floor((inner.height - (buttonTop - inner.y) - buttonGap * 2) / 3)));
     const buttons = starterExcuseIds.map((id, index) => {
-      const label = `ผลิต ${excuses[id].displayName}`;
+      const selectedWants = this.selectedCustomerWants(id);
+      const stockMissing = selectedWants && this.state.excuseStock[id] <= 0;
+      const label = stockMissing
+        ? `ผลิต ${excuses[id].displayName} · ควรผลิต`
+        : `ผลิต ${excuses[id].displayName}`;
       const y = buttonTop + index * (buttonHeight + buttonGap);
       return addButton(
         this,
         { x: inner.x, y, width: inner.width, height: buttonHeight },
         label,
         () => this.handleCraft(id),
-        { fontSize: layout.compact ? 12 : 14 },
+        {
+          fontSize: stockMissing ? layout.compact ? 10 : 12 : layout.compact ? 12 : 14,
+          fillColor: stockMissing ? colors.panelNeeded : undefined,
+          pressedColor: stockMissing ? colors.accent : undefined,
+        },
       );
     });
 
@@ -448,6 +492,33 @@ export class FactoryScene extends Phaser.Scene {
     if (!selected || selected.status !== 'waiting') {
       this.selectedCustomerInstanceId = undefined;
     }
+  }
+
+  private getSelectedCustomer(): CustomerInstance | undefined {
+    return getWaitingCustomerByInstanceId(this.state, this.selectedCustomerInstanceId);
+  }
+
+  private getSelectedWantedExcuseIds(): ExcuseId[] {
+    return getWantedExcuseIds(this.getSelectedCustomer());
+  }
+
+  private selectedCustomerWants(excuseId: ExcuseId): boolean {
+    return this.getSelectedWantedExcuseIds().includes(excuseId);
+  }
+
+  private getServeStatusText(): string {
+    const selected = this.getSelectedCustomer();
+    if (!selected) {
+      return 'เลือกลูกค้าก่อน';
+    }
+
+    return hasMatchingStock(this.state, selected) ? 'พร้อมเสิร์ฟ' : 'ต้องผลิตก่อน';
+  }
+
+  private addCueBorder(rect: Rect, ready: boolean): Phaser.GameObjects.Graphics {
+    return this.add.graphics()
+      .lineStyle(3, ready ? colors.readyBorder : colors.neededBorder, 1)
+      .strokeRoundedRect(rect.x + 2, rect.y + 2, rect.width - 4, rect.height - 4, 10);
   }
 
   private scheduleServedFeedbackRefresh(): void {

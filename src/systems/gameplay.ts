@@ -69,6 +69,22 @@ export function serveCustomerByInstanceId(state: GameState, instanceId: string, 
   return serveCustomer(state, match, definition, nowMs);
 }
 
+export function getWaitingCustomerByInstanceId(state: GameState, instanceId: string | undefined): CustomerInstance | undefined {
+  if (!instanceId) {
+    return undefined;
+  }
+
+  return state.activeCustomers.find((customer) => customer.instanceId === instanceId && customer.status === 'waiting');
+}
+
+export function getWantedExcuseIds(customer: CustomerInstance | undefined): ExcuseId[] {
+  return customer ? [customer.wantedExcuseId] : [];
+}
+
+export function hasMatchingStock(state: GameState, customer: CustomerInstance | undefined): boolean {
+  return getWantedExcuseIds(customer).some((excuseId) => sanitizeCount(state.excuseStock[excuseId]) > 0);
+}
+
 export function canRefillCustomerBatch(state: GameState): boolean {
   return state.activeCustomers.every((customer) => customer.status !== 'waiting');
 }
