@@ -209,28 +209,41 @@ export class FactoryScene extends Phaser.Scene {
     const selectedBorder = selected ? this.addSelectedBorder(rect) : undefined;
 
     if (definition && recentlyServed) {
-      const sold = addLabel(this, 'ขายสำเร็จ!', rect.x + 10, rect.y + 6, compact ? 12 : 14, '#2b2018', rect.width * 0.42);
+      const consumedExcuse = customer.servedReward?.consumedExcuseId
+        ? excuses[customer.servedReward.consumedExcuseId].displayName
+        : '-';
+      const sold = addLabel(this, 'ขายสำเร็จ!', rect.x + 10, rect.y + 5, compact ? 11 : 13, '#2b2018', rect.width * 0.42);
       const coins = addLabel(
         this,
         `+${customer.servedReward?.coins ?? 0} coins`,
         rect.x + rect.width * 0.52,
-        rect.y + 6,
-        compact ? 11 : 13,
+        rect.y + 5,
+        compact ? 10 : 12,
         '#2b2018',
         rect.width * 0.42,
+      );
+      const used = addLabel(
+        this,
+        `ใช้ข้ออ้าง: ${consumedExcuse}`,
+        rect.x + 10,
+        rect.y + rect.height / 2 - (compact ? 6 : 8),
+        compact ? 8 : 10,
+        '#2b2018',
+        rect.width - 20,
       );
       const smoothness = addLabel(
         this,
         `+${customer.servedReward?.smoothness ?? 0} ความเนียน`,
         rect.x + 10,
-        rect.y + rect.height - (compact ? 17 : 20),
-        compact ? 9 : 11,
+        rect.y + rect.height - (compact ? 14 : 18),
+        compact ? 8 : 10,
         '#74594c',
         rect.width - 20,
       );
       coins.setFontStyle('800');
+      used.setFontStyle('700');
       smoothness.setFontStyle('700');
-      return [bg, sold, coins, smoothness];
+      return [bg, sold, coins, used, smoothness];
     }
 
     if (queueCleared && slotIndex === 2) {

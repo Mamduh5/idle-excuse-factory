@@ -37,6 +37,7 @@ export type CustomerInstance = {
   servedReward?: {
     coins: number;
     smoothness: number;
+    consumedExcuseId: ExcuseId;
   };
 };
 

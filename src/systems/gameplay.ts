@@ -155,6 +155,7 @@ function serveCustomer(
   instance.servedReward = {
     coins: coinsGained,
     smoothness: smoothnessGained,
+    consumedExcuseId: excuseId,
   };
   state.lastUpdatedAtMs = nowMs;
 
