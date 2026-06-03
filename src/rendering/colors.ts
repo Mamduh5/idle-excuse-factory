@@ -1,0 +1,15 @@
+export const colors = {
+  ink: 0x2b2018,
+  muted: 0x74594c,
+  background: 0xf8ebcb,
+  panel: 0xfffaf0,
+  panelAlt: 0xffedbc,
+  hud: 0x5a3528,
+  footer: 0x4a2c22,
+  border: 0x4e342e,
+  accent: 0xffb84d,
+  accentPressed: 0xf59e0b,
+  greenPanel: 0xe6f4c9,
+  craftPanel: 0xffd6a5,
+  white: 0xffffff,
+};
