@@ -4,6 +4,7 @@ import { excuses, starterExcuseIds } from '../data/excuses';
 import { upgrades } from '../data/upgrades';
 import { zones } from '../data/zones';
 import { colors } from '../rendering/colors';
+import { clearSavedGame, loadGameState, saveGameState } from '../services';
 import { createInitialState } from '../state/initialState';
 import {
   canRefillCustomerBatch,
@@ -22,21 +23,24 @@ import { inset, type Rect } from '../utils/layout';
 
 const servedFeedbackDurationMs = 1500;
 const stockFlashDurationMs = 600;
+const autosaveIntervalMs = 12000;
 type StockFlashKind = 'craft' | 'consume';
 type ActiveModal = 'settings' | 'upgrades' | 'zones' | 'archive';
 
 export class FactoryScene extends Phaser.Scene {
-  private readonly state: GameState = createInitialState();
+  private state: GameState = createInitialState();
   private readonly customersById = new Map(customers.map((customer) => [customer.id, customer]));
   private uiGroup?: Phaser.GameObjects.Group;
   private modalPanel?: ModalPanelHandle;
   private activeModal?: ActiveModal;
+  private autosaveTimer?: Phaser.Time.TimerEvent;
   private toast?: Phaser.GameObjects.Text;
   private toastTween?: Phaser.Tweens.Tween;
   private servedFeedbackTimer?: Phaser.Time.TimerEvent;
   private stockFlashTimer?: Phaser.Time.TimerEvent;
   private stockFlashExcuseId?: ExcuseId;
   private stockFlashKind?: StockFlashKind;
+  private resetSaveArmed = false;
   private selectedCustomerInstanceId?: string;
 
   public constructor() {
@@ -44,12 +48,21 @@ export class FactoryScene extends Phaser.Scene {
   }
 
   public create(): void {
+    const loadResult = loadGameState();
+    this.state = loadResult.state;
     this.renderFactory();
+    this.showToast(loadResult.status === 'loaded' ? 'โหลดเซฟสำเร็จ' : 'เริ่มเกมใหม่');
+    this.autosaveTimer = this.time.addEvent({
+      delay: autosaveIntervalMs,
+      loop: true,
+      callback: () => this.saveProgress(),
+    });
     this.scale.on(Phaser.Scale.Events.RESIZE, this.renderFactory, this);
   }
 
   public destroy(): void {
     this.scale.off(Phaser.Scale.Events.RESIZE, this.renderFactory, this);
+    this.autosaveTimer?.remove();
     this.servedFeedbackTimer?.remove();
     this.stockFlashTimer?.remove();
   }
@@ -510,22 +523,26 @@ export class FactoryScene extends Phaser.Scene {
   }
 
   private openUpgradesModal(): void {
+    this.resetSaveArmed = false;
     this.activeModal = 'upgrades';
     this.renderActiveModal();
   }
 
   private openZonesModal(): void {
+    this.resetSaveArmed = false;
     this.activeModal = 'zones';
     this.renderActiveModal();
   }
 
   private openArchiveModal(): void {
+    this.resetSaveArmed = false;
     this.activeModal = 'archive';
     this.renderActiveModal();
   }
 
   private closeModal(): void {
     this.activeModal = undefined;
+    this.resetSaveArmed = false;
     this.modalPanel?.destroy();
     this.modalPanel = undefined;
   }
@@ -562,9 +579,9 @@ export class FactoryScene extends Phaser.Scene {
     });
     this.modalPanel = modal;
 
-    const rows = ['Sound: On', 'Music: On', 'Save: Not added yet', 'Reset Save: Not added yet'];
-    const rowGap = compact ? 9 : 12;
-    const rowHeight = compact ? 42 : 48;
+    const rows = ['Sound: On', 'Music: On', 'Save: Auto'];
+    const rowGap = compact ? 8 : 10;
+    const rowHeight = compact ? 38 : 44;
     const rowX = modal.contentRect.x;
     const rowWidth = modal.contentRect.width;
     const rowStartY = modal.contentRect.y;
@@ -575,6 +592,38 @@ export class FactoryScene extends Phaser.Scene {
       rowLabel.setFontStyle('700');
       return [rowPanel, rowLabel];
     });
+    const resetY = rowStartY + rows.length * (rowHeight + rowGap);
+    const resetHeight = compact ? 54 : 60;
+    const resetPanel = addPanel(
+      this,
+      { x: rowX, y: resetY, width: rowWidth, height: resetHeight },
+      this.resetSaveArmed ? colors.panelNeeded : colors.panelEmpty,
+      12,
+    );
+    const resetTitle = addLabel(
+      this,
+      this.resetSaveArmed ? 'กดอีกครั้งเพื่อยืนยัน' : 'Reset Save',
+      rowX + 14,
+      resetY + (compact ? 9 : 10),
+      compact ? 12 : 14,
+      '#2b2018',
+      rowWidth - 28,
+    );
+    const resetHelp = addLabel(
+      this,
+      'ล้างเซฟแล้วเริ่มใหม่',
+      rowX + 14,
+      resetY + (compact ? 31 : 35),
+      compact ? 9 : 10,
+      '#74594c',
+      rowWidth - 28,
+    );
+    const resetHitArea = this.add.zone(rowX, resetY, rowWidth, resetHeight)
+      .setOrigin(0)
+      .setInteractive({ useHandCursor: true });
+    resetHitArea.on('pointerup', () => this.handleResetSave());
+    resetTitle.setFontStyle('800');
+    resetHelp.setFontStyle('700');
 
     const note = addLabel(
       this,
@@ -587,7 +636,7 @@ export class FactoryScene extends Phaser.Scene {
     );
     note.setFontStyle('700');
 
-    modal.addContent(...rowObjects, note);
+    modal.addContent(...rowObjects, resetPanel, resetTitle, resetHelp, resetHitArea, note);
   }
 
   private renderUpgradesModal(): void {
@@ -837,6 +886,30 @@ export class FactoryScene extends Phaser.Scene {
     return [sectionPanel, titleLabel, ...rows];
   }
 
+  private handleResetSave(): void {
+    if (!this.resetSaveArmed) {
+      this.resetSaveArmed = true;
+      this.renderActiveModal();
+      this.showToast('กดอีกครั้งเพื่อยืนยัน');
+      return;
+    }
+
+    clearSavedGame();
+    this.state = createInitialState();
+    this.selectedCustomerInstanceId = undefined;
+    this.stockFlashTimer?.remove();
+    this.stockFlashExcuseId = undefined;
+    this.stockFlashKind = undefined;
+    this.servedFeedbackTimer?.remove();
+    this.resetSaveArmed = false;
+    this.renderFactory();
+    this.showToast('ล้างเซฟแล้วเริ่มใหม่');
+  }
+
+  private saveProgress(): void {
+    saveGameState(this.state);
+  }
+
   private handleCraft(excuseId: ExcuseId): void {
     const result = craftExcuse(this.state, excuseId);
     const excuse = excuses[excuseId];
@@ -848,6 +921,7 @@ export class FactoryScene extends Phaser.Scene {
     }
 
     this.scheduleStockFlash(result.excuseId, 'craft');
+    this.saveProgress();
     this.renderFactory();
     this.showToast(`ผลิต ${excuse.displayName} แล้ว ${result.stock}/${result.cap}`);
   }
@@ -867,6 +941,7 @@ export class FactoryScene extends Phaser.Scene {
       return;
     }
 
+    this.saveProgress();
     this.showToast('เรียกลูกค้าชุดต่อไปแล้ว');
   }
 
@@ -890,6 +965,7 @@ export class FactoryScene extends Phaser.Scene {
       this.scheduleStockFlash(consumedExcuseId, 'consume');
     }
     this.selectedCustomerInstanceId = undefined;
+    this.saveProgress();
     this.renderFactory();
     this.scheduleServedFeedbackRefresh();
     this.showToast(`ขายข้ออ้างสำเร็จ +${result.coinsGained} coins`);

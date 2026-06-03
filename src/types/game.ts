@@ -73,5 +73,6 @@ export type GameState = {
 export type SaveDataV1 = {
   version: 1;
   savedAtMs: number;
+  lastActiveAtMs: number;
   state: GameState;
 };
