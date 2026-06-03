@@ -22,8 +22,8 @@ export type CustomerDefinition = {
   displayName: string;
   problemText: string;
   wantedExcuseId: ExcuseId;
-  baseRewardCoins: number;
-  baseRewardSmoothness: number;
+  coinMultiplier: number;
+  smoothnessReward: number;
 };
 
 export type CustomerInstance = {
@@ -32,6 +32,8 @@ export type CustomerInstance = {
   wantedExcuseId: ExcuseId;
   patienceRemainingMs: number;
   createdAtMs: number;
+  status: 'waiting' | 'served';
+  servedAtMs?: number;
 };
 
 export type UpgradeDefinition = {

@@ -4,13 +4,15 @@ import { excuses, starterExcuseIds } from '../data/excuses';
 import { zones } from '../data/zones';
 import { colors } from '../rendering/colors';
 import { createInitialState } from '../state/initialState';
-import type { GameState } from '../types/game';
+import { craftAndAutoServe } from '../systems/gameplay';
+import type { CustomerDefinition, CustomerInstance, ExcuseId, GameState } from '../types/game';
 import { createFactoryLayout, type FactoryLayout } from '../ui/FactoryLayout';
 import { addButton, addLabel, addPanel } from '../ui/phaserUi';
 import { inset, type Rect } from '../utils/layout';
 
 export class FactoryScene extends Phaser.Scene {
   private readonly state: GameState = createInitialState();
+  private readonly customersById = new Map(customers.map((customer) => [customer.id, customer]));
   private uiGroup?: Phaser.GameObjects.Group;
   private toast?: Phaser.GameObjects.Text;
   private toastTween?: Phaser.Tweens.Tween;
@@ -104,12 +106,11 @@ export class FactoryScene extends Phaser.Scene {
     const slotGap = layout.compact ? 5 : 7;
     const slotTop = inner.y + (layout.compact ? 22 : 29);
     const slotHeight = Math.max(34, Math.floor((inner.height - (slotTop - inner.y) - slotGap * 2) / 3));
-    const slots = customers.slice(0, 3).flatMap((customer, index) => {
+    const slots = this.state.activeCustomers.slice(0, 3).flatMap((customer, index) => {
       const y = slotTop + index * (slotHeight + slotGap);
       return this.renderCustomerSlot(
         { x: inner.x, y, width: inner.width, height: slotHeight },
-        customer.displayName,
-        excuses[customer.wantedExcuseId].displayName,
+        customer,
         layout.compact,
       );
     });
@@ -117,14 +118,36 @@ export class FactoryScene extends Phaser.Scene {
     this.addToUi(panel, heading, ...slots);
   }
 
-  private renderCustomerSlot(rect: Rect, title: string, wanted: string, compact: boolean): Phaser.GameObjects.GameObject[] {
+  private renderCustomerSlot(rect: Rect, customer: CustomerInstance, compact: boolean): Phaser.GameObjects.GameObject[] {
     const bg = addPanel(this, rect, colors.panel, 10);
+    const definition = this.customersById.get(customer.customerId);
+
+    if (!definition || customer.status === 'served') {
+      const empty = addLabel(
+        this,
+        'รอลูกค้าคนต่อไป...',
+        rect.x + 10,
+        rect.y + rect.height / 2 - (compact ? 8 : 10),
+        compact ? 11 : 13,
+        '#74594c',
+        rect.width - 20,
+      );
+      empty.setFontStyle('700');
+      return [bg, empty];
+    }
+
+    const title = definition.displayName;
+    const wanted = excuses[customer.wantedExcuseId].displayName;
     const name = addLabel(this, title, rect.x + 10, rect.y + 6, compact ? 11 : 13, '#2b2018', rect.width * 0.58);
-    const want = addLabel(this, `ต้องการ: ${wanted}`, rect.x + rect.width * 0.58, rect.y + 6, compact ? 10 : 12, '#74594c', rect.width * 0.38);
+    const want = addLabel(this, `ต้องการ: ${wanted}`, rect.x + rect.width * 0.56, rect.y + 6, compact ? 10 : 12, '#74594c', rect.width * 0.42);
     want.setFontStyle('700');
-    const status = addLabel(this, 'รอลูกค้าคนต่อไป...', rect.x + 10, rect.y + rect.height - (compact ? 17 : 20), compact ? 9 : 11, '#74594c', rect.width - 20);
+    const status = addLabel(this, this.getCustomerStatus(definition), rect.x + 10, rect.y + rect.height - (compact ? 17 : 20), compact ? 9 : 11, '#74594c', rect.width - 20);
     status.setFontStyle('500');
     return [bg, name, want, status];
+  }
+
+  private getCustomerStatus(customer: CustomerDefinition): string {
+    return customer.problemText;
   }
 
   private renderExcuseCounter(layout: FactoryLayout): void {
@@ -171,7 +194,7 @@ export class FactoryScene extends Phaser.Scene {
         this,
         { x: inner.x, y, width: inner.width, height: buttonHeight },
         label,
-        () => this.showToast(`${label} ยังเป็นตัวอย่าง`),
+        () => this.handleCraft(id),
         { fontSize: layout.compact ? 12 : 14 },
       );
     });
@@ -203,6 +226,24 @@ export class FactoryScene extends Phaser.Scene {
     ));
 
     this.addToUi(panel, ...buttons.flatMap((button) => button.group.getChildren()));
+  }
+
+  private handleCraft(excuseId: ExcuseId): void {
+    const result = craftAndAutoServe(this.state, excuseId);
+    const excuse = excuses[excuseId];
+    this.renderFactory();
+
+    if (!result.craft.crafted) {
+      this.showToast('ข้ออ้างเต็มแล้ว!');
+      return;
+    }
+
+    if (result.serve.served) {
+      this.showToast(`ขายข้ออ้างสำเร็จ +${result.serve.coinsGained} coins`);
+      return;
+    }
+
+    this.showToast(`ผลิต ${excuse.displayName} แล้ว ${result.craft.stock}/${result.craft.cap}`);
   }
 
   private showToast(message: string): void {
