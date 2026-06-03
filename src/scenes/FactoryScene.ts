@@ -20,6 +20,7 @@ import { inset, type Rect } from '../utils/layout';
 
 const servedFeedbackDurationMs = 1500;
 const stockFlashDurationMs = 600;
+type StockFlashKind = 'craft' | 'consume';
 
 export class FactoryScene extends Phaser.Scene {
   private readonly state: GameState = createInitialState();
@@ -30,6 +31,7 @@ export class FactoryScene extends Phaser.Scene {
   private servedFeedbackTimer?: Phaser.Time.TimerEvent;
   private stockFlashTimer?: Phaser.Time.TimerEvent;
   private stockFlashExcuseId?: ExcuseId;
+  private stockFlashKind?: StockFlashKind;
   private selectedCustomerInstanceId?: string;
 
   public constructor() {
@@ -382,39 +384,41 @@ export class FactoryScene extends Phaser.Scene {
     const title = addLabel(this, label, rect.x + 10, rect.y + (compact ? 6 : 7), compact ? 11 : 13, '#2b2018', rect.width * 0.55);
     const count = addLabel(this, `${countPrefix} ${stock}/${maxStock}`, rect.x + rect.width * 0.58, rect.y + (compact ? 6 : 7), compact ? 10 : 12, selectedWants ? '#2b2018' : '#74594c', rect.width * 0.39);
     count.setFontStyle('700');
-    const flashObjects = flashing ? this.renderStockFlash(rect, compact) : [];
+    const flashObjects = flashing ? this.renderStockFlash(rect, compact, this.stockFlashKind ?? 'consume') : [];
     return [bg, ...(border ? [border] : []), title, count, ...flashObjects];
   }
 
-  private renderStockFlash(rect: Rect, compact: boolean): Phaser.GameObjects.GameObject[] {
+  private renderStockFlash(rect: Rect, compact: boolean, kind: StockFlashKind): Phaser.GameObjects.GameObject[] {
+    const positive = kind === 'craft';
+    const flashColor = positive ? colors.readyBorder : colors.accentPressed;
     const glow = this.add.graphics()
-      .lineStyle(4, colors.accentPressed, 1)
+      .lineStyle(4, flashColor, 1)
       .strokeRoundedRect(rect.x + 3, rect.y + 3, rect.width - 6, rect.height - 6, 10);
-    const minusOne = addLabel(
+    const delta = addLabel(
       this,
-      '-1',
+      positive ? '+1' : '-1',
       rect.x + rect.width - (compact ? 42 : 48),
       rect.y + rect.height / 2 - (compact ? 9 : 11),
       compact ? 14 : 16,
-      '#d97706',
+      positive ? '#2f7d32' : '#d97706',
       36,
     );
-    minusOne.setFontStyle('900');
+    delta.setFontStyle('900');
 
     this.tweens.add({
-      targets: [glow, minusOne],
+      targets: [glow, delta],
       alpha: { from: 1, to: 0 },
       duration: stockFlashDurationMs,
       ease: 'Quad.easeOut',
     });
     this.tweens.add({
-      targets: minusOne,
-      y: minusOne.y - 8,
+      targets: delta,
+      y: delta.y - 8,
       duration: stockFlashDurationMs,
       ease: 'Quad.easeOut',
     });
 
-    return [glow, minusOne];
+    return [glow, delta];
   }
 
   private renderCraftPanel(layout: FactoryLayout): void {
@@ -478,13 +482,15 @@ export class FactoryScene extends Phaser.Scene {
   private handleCraft(excuseId: ExcuseId): void {
     const result = craftExcuse(this.state, excuseId);
     const excuse = excuses[excuseId];
-    this.renderFactory();
 
     if (!result.crafted) {
+      this.renderFactory();
       this.showToast('ข้ออ้างเต็มแล้ว!');
       return;
     }
 
+    this.scheduleStockFlash(result.excuseId, 'craft');
+    this.renderFactory();
     this.showToast(`ผลิต ${excuse.displayName} แล้ว ${result.stock}/${result.cap}`);
   }
 
@@ -523,7 +529,7 @@ export class FactoryScene extends Phaser.Scene {
     });
     const consumedExcuseId = servedCustomer?.servedReward?.consumedExcuseId ?? result.excuseId;
     if (consumedExcuseId) {
-      this.scheduleStockFlash(consumedExcuseId);
+      this.scheduleStockFlash(consumedExcuseId, 'consume');
     }
     this.selectedCustomerInstanceId = undefined;
     this.renderFactory();
@@ -591,11 +597,13 @@ export class FactoryScene extends Phaser.Scene {
     });
   }
 
-  private scheduleStockFlash(excuseId: ExcuseId): void {
+  private scheduleStockFlash(excuseId: ExcuseId, kind: StockFlashKind): void {
     this.stockFlashTimer?.remove();
     this.stockFlashExcuseId = excuseId;
+    this.stockFlashKind = kind;
     this.stockFlashTimer = this.time.delayedCall(stockFlashDurationMs, () => {
       this.stockFlashExcuseId = undefined;
+      this.stockFlashKind = undefined;
       this.renderFactory();
     });
   }
