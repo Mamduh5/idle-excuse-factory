@@ -10,12 +10,15 @@ import { createFactoryLayout, type FactoryLayout } from '../ui/FactoryLayout';
 import { addButton, addLabel, addPanel } from '../ui/phaserUi';
 import { inset, type Rect } from '../utils/layout';
 
+const servedFeedbackDurationMs = 1500;
+
 export class FactoryScene extends Phaser.Scene {
   private readonly state: GameState = createInitialState();
   private readonly customersById = new Map(customers.map((customer) => [customer.id, customer]));
   private uiGroup?: Phaser.GameObjects.Group;
   private toast?: Phaser.GameObjects.Text;
   private toastTween?: Phaser.Tweens.Tween;
+  private servedFeedbackTimer?: Phaser.Time.TimerEvent;
 
   public constructor() {
     super('FactoryScene');
@@ -28,6 +31,7 @@ export class FactoryScene extends Phaser.Scene {
 
   public destroy(): void {
     this.scale.off(Phaser.Scale.Events.RESIZE, this.renderFactory, this);
+    this.servedFeedbackTimer?.remove();
   }
 
   private renderFactory(): void {
@@ -106,26 +110,69 @@ export class FactoryScene extends Phaser.Scene {
     const slotGap = layout.compact ? 5 : 7;
     const slotTop = inner.y + (layout.compact ? 22 : 29);
     const slotHeight = Math.max(34, Math.floor((inner.height - (slotTop - inner.y) - slotGap * 2) / 3));
+    const nowMs = Date.now();
+    const queueCleared = this.isQueueCleared(nowMs);
     const slots = this.state.activeCustomers.slice(0, 3).flatMap((customer, index) => {
       const y = slotTop + index * (slotHeight + slotGap);
       return this.renderCustomerSlot(
         { x: inner.x, y, width: inner.width, height: slotHeight },
         customer,
         layout.compact,
+        queueCleared,
+        index,
+        nowMs,
       );
     });
 
     this.addToUi(panel, heading, ...slots);
   }
 
-  private renderCustomerSlot(rect: Rect, customer: CustomerInstance, compact: boolean): Phaser.GameObjects.GameObject[] {
-    const bg = addPanel(this, rect, colors.panel, 10);
+  private renderCustomerSlot(
+    rect: Rect,
+    customer: CustomerInstance,
+    compact: boolean,
+    queueCleared: boolean,
+    slotIndex: number,
+    nowMs: number,
+  ): Phaser.GameObjects.GameObject[] {
     const definition = this.customersById.get(customer.customerId);
+    const recentlyServed = this.isRecentlyServed(customer, nowMs);
+    const bg = addPanel(
+      this,
+      rect,
+      recentlyServed ? colors.panelServed : customer.status === 'served' ? colors.panelEmpty : colors.panel,
+      10,
+    );
+
+    if (definition && recentlyServed) {
+      const sold = addLabel(this, 'ขายสำเร็จ!', rect.x + 10, rect.y + 6, compact ? 12 : 14, '#2b2018', rect.width * 0.42);
+      const coins = addLabel(
+        this,
+        `+${customer.servedReward?.coins ?? 0} coins`,
+        rect.x + rect.width * 0.52,
+        rect.y + 6,
+        compact ? 11 : 13,
+        '#2b2018',
+        rect.width * 0.42,
+      );
+      const smoothness = addLabel(
+        this,
+        `+${customer.servedReward?.smoothness ?? 0} ความเนียน`,
+        rect.x + 10,
+        rect.y + rect.height - (compact ? 17 : 20),
+        compact ? 9 : 11,
+        '#74594c',
+        rect.width - 20,
+      );
+      coins.setFontStyle('800');
+      smoothness.setFontStyle('700');
+      return [bg, sold, coins, smoothness];
+    }
 
     if (!definition || customer.status === 'served') {
       const empty = addLabel(
         this,
-        'รอลูกค้าคนต่อไป...',
+        this.getEmptySlotText(queueCleared, slotIndex),
         rect.x + 10,
         rect.y + rect.height / 2 - (compact ? 8 : 10),
         compact ? 11 : 13,
@@ -146,8 +193,36 @@ export class FactoryScene extends Phaser.Scene {
     return [bg, name, want, status];
   }
 
+  private getEmptySlotText(queueCleared: boolean, slotIndex: number): string {
+    if (!queueCleared) {
+      return 'รอลูกค้าคนต่อไป...';
+    }
+
+    if (slotIndex === 0) {
+      return 'ลูกค้าหมดคิวแล้ว';
+    }
+
+    if (slotIndex === 1) {
+      return 'รอลูกค้าชุดต่อไป...';
+    }
+
+    return 'ผลิตเก็บสต็อกต่อได้';
+  }
+
   private getCustomerStatus(customer: CustomerDefinition): string {
     return customer.problemText;
+  }
+
+  private isRecentlyServed(customer: CustomerInstance, nowMs: number): boolean {
+    return customer.status === 'served'
+      && customer.servedAtMs !== undefined
+      && nowMs - customer.servedAtMs < servedFeedbackDurationMs;
+  }
+
+  private isQueueCleared(nowMs: number): boolean {
+    return this.state.activeCustomers.length > 0
+      && this.state.activeCustomers.every((customer) => customer.status === 'served')
+      && this.state.activeCustomers.every((customer) => !this.isRecentlyServed(customer, nowMs));
   }
 
   private renderExcuseCounter(layout: FactoryLayout): void {
@@ -239,11 +314,29 @@ export class FactoryScene extends Phaser.Scene {
     }
 
     if (result.serve.served) {
+      this.scheduleServedFeedbackRefresh();
       this.showToast(`ขายข้ออ้างสำเร็จ +${result.serve.coinsGained} coins`);
       return;
     }
 
-    this.showToast(`ผลิต ${excuse.displayName} แล้ว ${result.craft.stock}/${result.craft.cap}`);
+    this.showToast(
+      this.hasWaitingCustomerForExcuse(excuseId)
+        ? `ผลิต ${excuse.displayName} แล้ว ${result.craft.stock}/${result.craft.cap}`
+        : 'ยังไม่มีลูกค้าที่ต้องใช้ข้อนี้',
+    );
+  }
+
+  private hasWaitingCustomerForExcuse(excuseId: ExcuseId): boolean {
+    return this.state.activeCustomers.some((customer) => {
+      return customer.status === 'waiting' && customer.wantedExcuseId === excuseId;
+    });
+  }
+
+  private scheduleServedFeedbackRefresh(): void {
+    this.servedFeedbackTimer?.remove();
+    this.servedFeedbackTimer = this.time.delayedCall(servedFeedbackDurationMs, () => {
+      this.renderFactory();
+    });
   }
 
   private showToast(message: string): void {

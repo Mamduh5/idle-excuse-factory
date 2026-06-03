@@ -34,6 +34,10 @@ export type CustomerInstance = {
   createdAtMs: number;
   status: 'waiting' | 'served';
   servedAtMs?: number;
+  servedReward?: {
+    coins: number;
+    smoothness: number;
+  };
 };
 
 export type UpgradeDefinition = {

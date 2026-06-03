@@ -101,6 +101,10 @@ function serveCustomer(
   state.currencies.smoothness = sanitizeCount(state.currencies.smoothness + smoothnessGained);
   instance.status = 'served';
   instance.servedAtMs = nowMs;
+  instance.servedReward = {
+    coins: coinsGained,
+    smoothness: smoothnessGained,
+  };
   state.lastUpdatedAtMs = nowMs;
 
   return {

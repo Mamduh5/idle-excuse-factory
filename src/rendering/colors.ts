@@ -4,6 +4,8 @@ export const colors = {
   background: 0xf8ebcb,
   panel: 0xfffaf0,
   panelAlt: 0xffedbc,
+  panelEmpty: 0xead7aa,
+  panelServed: 0xd9f99d,
   hud: 0x5a3528,
   footer: 0x4a2c22,
   border: 0x4e342e,
