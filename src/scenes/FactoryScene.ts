@@ -23,7 +23,7 @@ import { inset, type Rect } from '../utils/layout';
 const servedFeedbackDurationMs = 1500;
 const stockFlashDurationMs = 600;
 type StockFlashKind = 'craft' | 'consume';
-type ActiveModal = 'settings' | 'upgrades' | 'zones';
+type ActiveModal = 'settings' | 'upgrades' | 'zones' | 'archive';
 
 export class FactoryScene extends Phaser.Scene {
   private readonly state: GameState = createInitialState();
@@ -475,6 +475,10 @@ export class FactoryScene extends Phaser.Scene {
         onPress = () => this.openZonesModal();
       }
 
+      if (label === 'Archive') {
+        onPress = () => this.openArchiveModal();
+      }
+
       if (label === 'Settings') {
         onPress = () => this.openSettingsModal();
       }
@@ -515,6 +519,11 @@ export class FactoryScene extends Phaser.Scene {
     this.renderActiveModal();
   }
 
+  private openArchiveModal(): void {
+    this.activeModal = 'archive';
+    this.renderActiveModal();
+  }
+
   private closeModal(): void {
     this.activeModal = undefined;
     this.modalPanel?.destroy();
@@ -535,6 +544,10 @@ export class FactoryScene extends Phaser.Scene {
 
     if (this.activeModal === 'zones') {
       this.renderZonesModal();
+    }
+
+    if (this.activeModal === 'archive') {
+      this.renderArchiveModal();
     }
   }
 
@@ -723,6 +736,105 @@ export class FactoryScene extends Phaser.Scene {
     note.setFontStyle('700');
 
     modal.addContent(...rowObjects, note);
+  }
+
+  private renderArchiveModal(): void {
+    const height = this.scale.height;
+    const compact = height < 720;
+    const modal = createModalPanel(this, {
+      depth: modalDepth,
+      onClose: () => this.closeModal(),
+      subtitle: 'คลังข้ออ้างและลูกค้า',
+      title: 'Archive',
+    });
+    this.modalPanel = modal;
+
+    const rowX = modal.contentRect.x;
+    const rowWidth = modal.contentRect.width;
+    const topY = modal.contentRect.y;
+    const progressHeight = compact ? 44 : 50;
+    const progressPanel = addPanel(this, { x: rowX, y: topY, width: rowWidth, height: progressHeight }, colors.panelAlt, 12);
+    const excuseProgress = addLabel(
+      this,
+      `Excuses discovered: ${starterExcuseIds.length} / ?`,
+      rowX + 12,
+      topY + (compact ? 7 : 8),
+      compact ? 10 : 12,
+      '#2b2018',
+      rowWidth - 24,
+    );
+    const customerProgress = addLabel(
+      this,
+      `Customers discovered: ${customers.length} / ?`,
+      rowX + 12,
+      topY + (compact ? 24 : 28),
+      compact ? 10 : 12,
+      '#2b2018',
+      rowWidth - 24,
+    );
+    excuseProgress.setFontStyle('800');
+    customerProgress.setFontStyle('800');
+
+    const sectionGap = compact ? 8 : 10;
+    const sectionY = topY + progressHeight + sectionGap;
+    const sectionWidth = (rowWidth - sectionGap) / 2;
+    const sectionHeight = compact ? 136 : 152;
+    const excuseItems = starterExcuseIds.map((id) => excuses[id].displayName);
+    const customerItems = customers.slice(0, 3).map((customer) => customer.displayName);
+    const excuseSection = this.renderArchiveSection(
+      { x: rowX, y: sectionY, width: sectionWidth, height: sectionHeight },
+      compact ? 'Excuses' : 'Starter excuses',
+      excuseItems,
+      compact,
+    );
+    const customerSection = this.renderArchiveSection(
+      { x: rowX + sectionWidth + sectionGap, y: sectionY, width: sectionWidth, height: sectionHeight },
+      compact ? 'Customers' : 'Starter customers',
+      customerItems,
+      compact,
+    );
+
+    const note = addLabel(
+      this,
+      compact ? 'ระบบสะสมจะเพิ่มภายหลัง' : 'ระบบสะสมจะเพิ่มภายหลัง · Soon',
+      rowX,
+      modal.panelRect.y + modal.panelRect.height - (compact ? 34 : 40),
+      compact ? 9 : 11,
+      '#74594c',
+      rowWidth,
+    );
+    note.setFontStyle('800');
+
+    modal.addContent(progressPanel, excuseProgress, customerProgress, ...excuseSection, ...customerSection, note);
+  }
+
+  private renderArchiveSection(rect: Rect, title: string, items: string[], compact: boolean): Phaser.GameObjects.GameObject[] {
+    const sectionPanel = addPanel(this, rect, colors.panel, 12);
+    const titleLabel = addLabel(this, title, rect.x + 8, rect.y + 7, compact ? 10 : 12, '#2b2018', rect.width - 16);
+    titleLabel.setFontStyle('900');
+
+    const rowGap = compact ? 5 : 6;
+    const rowHeight = compact ? 28 : 31;
+    const rowStartY = rect.y + (compact ? 27 : 32);
+    const rows = items.flatMap((item, index) => {
+      const y = rowStartY + index * (rowHeight + rowGap);
+      const rowPanel = addPanel(this, { x: rect.x + 7, y, width: rect.width - 14, height: rowHeight }, colors.greenPanel, 9);
+      const name = addLabel(this, item, rect.x + 14, y + (compact ? 5 : 6), compact ? 8 : 9, '#2b2018', rect.width - 56);
+      const badge = addLabel(
+        this,
+        'Seen',
+        rect.x + rect.width - 51,
+        y + (compact ? 6 : 7),
+        compact ? 7 : 8,
+        '#2f7d32',
+        44,
+      );
+      name.setFontStyle('800');
+      badge.setFontStyle('900');
+      return [rowPanel, name, badge];
+    });
+
+    return [sectionPanel, titleLabel, ...rows];
   }
 
   private handleCraft(excuseId: ExcuseId): void {
