@@ -15,4 +15,11 @@ export const upgrades: UpgradeDefinition[] = [
     costCoins: 80,
     maxLevel: 5,
   },
+  {
+    id: 'bigger_shelf',
+    displayName: 'ชั้นวางข้ออ้าง',
+    description: 'เพิ่มพื้นที่เก็บสต็อกข้ออ้างในอนาคต',
+    costCoins: 120,
+    maxLevel: 5,
+  },
 ];

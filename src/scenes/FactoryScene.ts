@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { customers } from '../data/customers';
 import { excuses, starterExcuseIds } from '../data/excuses';
+import { upgrades } from '../data/upgrades';
 import { zones } from '../data/zones';
 import { colors } from '../rendering/colors';
 import { createInitialState } from '../state/initialState';
@@ -22,7 +23,7 @@ import { inset, type Rect } from '../utils/layout';
 const servedFeedbackDurationMs = 1500;
 const stockFlashDurationMs = 600;
 type StockFlashKind = 'craft' | 'consume';
-type ActiveModal = 'settings';
+type ActiveModal = 'settings' | 'upgrades';
 
 export class FactoryScene extends Phaser.Scene {
   private readonly state: GameState = createInitialState();
@@ -465,9 +466,14 @@ export class FactoryScene extends Phaser.Scene {
     const gap = 6;
     const width = (inner.width - gap * (labels.length - 1)) / labels.length;
     const buttons = labels.map((label, index) => {
-      const onPress = label === 'Settings'
-        ? () => this.openSettingsModal()
-        : () => this.showToast(`${label} panel coming soon`);
+      let onPress = (): void => this.showToast(`${label} panel coming soon`);
+      if (label === 'Upgrades') {
+        onPress = () => this.openUpgradesModal();
+      }
+
+      if (label === 'Settings') {
+        onPress = () => this.openSettingsModal();
+      }
 
       return addButton(
         this,
@@ -495,6 +501,11 @@ export class FactoryScene extends Phaser.Scene {
     this.renderActiveModal();
   }
 
+  private openUpgradesModal(): void {
+    this.activeModal = 'upgrades';
+    this.renderActiveModal();
+  }
+
   private closeModal(): void {
     this.activeModal = undefined;
     this.modalPanel?.destroy();
@@ -507,6 +518,10 @@ export class FactoryScene extends Phaser.Scene {
 
     if (this.activeModal === 'settings') {
       this.renderSettingsModal();
+    }
+
+    if (this.activeModal === 'upgrades') {
+      this.renderUpgradesModal();
     }
   }
 
@@ -541,6 +556,69 @@ export class FactoryScene extends Phaser.Scene {
       rowX,
       modal.panelRect.y + modal.panelRect.height - (compact ? 34 : 40),
       compact ? 10 : 11,
+      '#74594c',
+      rowWidth,
+    );
+    note.setFontStyle('700');
+
+    modal.addContent(...rowObjects, note);
+  }
+
+  private renderUpgradesModal(): void {
+    const height = this.scale.height;
+    const compact = height < 720;
+    const modal = createModalPanel(this, {
+      depth: modalDepth,
+      onClose: () => this.closeModal(),
+      subtitle: 'อัปเกรดโรงงานข้ออ้าง',
+      title: 'Upgrades',
+    });
+    this.modalPanel = modal;
+
+    const visibleUpgrades = upgrades.slice(0, 3);
+    const rowGap = compact ? 7 : 9;
+    const rowHeight = compact ? 62 : 70;
+    const rowX = modal.contentRect.x;
+    const rowWidth = modal.contentRect.width;
+    const rowStartY = modal.contentRect.y;
+    const buttonWidth = compact ? 62 : 76;
+    const contentWidth = rowWidth - buttonWidth - 28;
+    const rowObjects = visibleUpgrades.flatMap((upgrade, index) => {
+      const y = rowStartY + index * (rowHeight + rowGap);
+      const rowPanel = addPanel(this, { x: rowX, y, width: rowWidth, height: rowHeight }, colors.panelAlt, 12);
+      const name = addLabel(this, upgrade.displayName, rowX + 12, y + 8, compact ? 11 : 13, '#2b2018', contentWidth);
+      const description = addLabel(this, upgrade.description, rowX + 12, y + (compact ? 26 : 30), compact ? 8 : 10, '#74594c', contentWidth);
+      const cost = addLabel(this, `Lv 0 · Cost ${upgrade.costCoins} coins`, rowX + 12, y + rowHeight - (compact ? 17 : 19), compact ? 8 : 10, '#2b2018', contentWidth);
+      const soonRect = {
+        x: rowX + rowWidth - buttonWidth - 10,
+        y: y + rowHeight / 2 - (compact ? 14 : 16),
+        width: buttonWidth,
+        height: compact ? 28 : 32,
+      };
+      const soonButton = addPanel(this, soonRect, colors.panelEmpty, 10);
+      const soon = addLabel(
+        this,
+        compact ? 'Soon' : 'ยังไม่เปิด',
+        soonRect.x + soonRect.width / 2,
+        soonRect.y + soonRect.height / 2 - (compact ? 6 : 7),
+        compact ? 9 : 10,
+        '#74594c',
+        soonRect.width,
+      );
+      name.setFontStyle('800');
+      description.setFontStyle('600');
+      cost.setFontStyle('800');
+      soon.setOrigin(0.5, 0);
+      soon.setFontStyle('800');
+      return [rowPanel, name, description, cost, soonButton, soon];
+    });
+
+    const note = addLabel(
+      this,
+      'Upgrade purchases are not added yet',
+      rowX,
+      modal.panelRect.y + modal.panelRect.height - (compact ? 34 : 40),
+      compact ? 9 : 11,
       '#74594c',
       rowWidth,
     );
