@@ -4,7 +4,7 @@ import { excuses, starterExcuseIds } from '../data/excuses';
 import { zones } from '../data/zones';
 import { colors } from '../rendering/colors';
 import { createInitialState } from '../state/initialState';
-import { craftAndAutoServe } from '../systems/gameplay';
+import { canRefillCustomerBatch, craftAndAutoServe, refillCustomerBatchAndAutoServe } from '../systems/gameplay';
 import type { CustomerDefinition, CustomerInstance, ExcuseId, GameState } from '../types/game';
 import { createFactoryLayout, type FactoryLayout } from '../ui/FactoryLayout';
 import { addButton, addLabel, addPanel } from '../ui/phaserUi';
@@ -169,6 +169,22 @@ export class FactoryScene extends Phaser.Scene {
       return [bg, sold, coins, smoothness];
     }
 
+    if (queueCleared && slotIndex === 2) {
+      const buttonRect = inset(rect, compact ? 5 : 7);
+      const button = addButton(
+        this,
+        buttonRect,
+        compact ? 'ชุดต่อไป' : 'เรียกลูกค้าชุดต่อไป',
+        () => this.handleNextBatch(),
+        {
+          fontSize: compact ? 10 : 12,
+          fillColor: colors.accent,
+          pressedColor: colors.accentPressed,
+        },
+      );
+      return [bg, ...button.group.getChildren()];
+    }
+
     if (!definition || customer.status === 'served') {
       const empty = addLabel(
         this,
@@ -324,6 +340,30 @@ export class FactoryScene extends Phaser.Scene {
         ? `ผลิต ${excuse.displayName} แล้ว ${result.craft.stock}/${result.craft.cap}`
         : 'ยังไม่มีลูกค้าที่ต้องใช้ข้อนี้',
     );
+  }
+
+  private handleNextBatch(): void {
+    if (!canRefillCustomerBatch(this.state)) {
+      this.showToast('ยังมีลูกค้ารออยู่');
+      return;
+    }
+
+    const result = refillCustomerBatchAndAutoServe(this.state);
+    this.renderFactory();
+
+    if (!result.refilled) {
+      this.showToast('ยังมีลูกค้ารออยู่');
+      return;
+    }
+
+    if (result.served.length > 0) {
+      const coins = result.served.reduce((total, served) => total + served.coinsGained, 0);
+      this.scheduleServedFeedbackRefresh();
+      this.showToast(`เรียกชุดต่อไป และขายได้ +${coins} coins`);
+      return;
+    }
+
+    this.showToast('เรียกลูกค้าชุดต่อไปแล้ว');
   }
 
   private hasWaitingCustomerForExcuse(excuseId: ExcuseId): boolean {

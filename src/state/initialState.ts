@@ -40,6 +40,7 @@ export function createInitialState(nowMs = Date.now()): GameState {
         status: 'waiting',
       },
     ],
+    customerBatchNumber: 0,
     upgrades: {},
     unlockedZoneIds: ['daily_life'],
     lastUpdatedAtMs: nowMs,

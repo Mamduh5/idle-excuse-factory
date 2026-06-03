@@ -62,6 +62,7 @@ export type GameState = {
   currentZoneId: ZoneDefinition['id'];
   excuseStock: ExcuseStock;
   activeCustomers: CustomerInstance[];
+  customerBatchNumber: number;
   upgrades: UpgradeState;
   unlockedZoneIds: ZoneDefinition['id'][];
   lastUpdatedAtMs: number;

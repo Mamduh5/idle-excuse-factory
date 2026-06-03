@@ -27,6 +27,12 @@ export type StockChangeResult = {
   serve: ServeResult;
 };
 
+export type RefillResult = {
+  refilled: boolean;
+  batchNumber: number;
+  served: ServeResult[];
+};
+
 const customerById = new Map(customers.map((customer) => [customer.id, customer]));
 
 export function craftExcuse(state: GameState, excuseId: ExcuseId): CraftResult {
@@ -78,6 +84,55 @@ export function autoServeOneCustomer(state: GameState, nowMs = Date.now()): Serv
   }
 
   return serveCustomer(state, match, definition, nowMs);
+}
+
+export function canRefillCustomerBatch(state: GameState): boolean {
+  return state.activeCustomers.every((customer) => customer.status !== 'waiting');
+}
+
+export function refillCustomerBatchAndAutoServe(state: GameState, nowMs = Date.now()): RefillResult {
+  if (!canRefillCustomerBatch(state)) {
+    return {
+      refilled: false,
+      batchNumber: state.customerBatchNumber,
+      served: [],
+    };
+  }
+
+  const batchNumber = sanitizeCount(state.customerBatchNumber) + 1;
+  state.customerBatchNumber = batchNumber;
+  state.activeCustomers = createCustomerBatch(batchNumber, nowMs);
+  state.lastUpdatedAtMs = nowMs;
+
+  return {
+    refilled: true,
+    batchNumber,
+    served: autoServeWaitingCustomers(state, nowMs),
+  };
+}
+
+function autoServeWaitingCustomers(state: GameState, nowMs: number): ServeResult[] {
+  const served: ServeResult[] = [];
+
+  while (true) {
+    const result = autoServeOneCustomer(state, nowMs);
+    if (!result.served) {
+      return served;
+    }
+
+    served.push(result);
+  }
+}
+
+function createCustomerBatch(batchNumber: number, nowMs: number): CustomerInstance[] {
+  return customers.slice(0, 3).map((customer, index) => ({
+    instanceId: `batch-${batchNumber}-${index}-${customer.id}`,
+    customerId: customer.id,
+    wantedExcuseId: customer.wantedExcuseId,
+    patienceRemainingMs: 0,
+    createdAtMs: nowMs,
+    status: 'waiting',
+  }));
 }
 
 function serveCustomer(
