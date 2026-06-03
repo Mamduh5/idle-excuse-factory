@@ -55,6 +55,7 @@ export type ZoneDefinition = {
   id: string;
   displayName: string;
   description: string;
+  unlockRequirementText?: string;
   unlockedByDefault: boolean;
 };
 

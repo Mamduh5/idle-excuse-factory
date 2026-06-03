@@ -23,7 +23,7 @@ import { inset, type Rect } from '../utils/layout';
 const servedFeedbackDurationMs = 1500;
 const stockFlashDurationMs = 600;
 type StockFlashKind = 'craft' | 'consume';
-type ActiveModal = 'settings' | 'upgrades';
+type ActiveModal = 'settings' | 'upgrades' | 'zones';
 
 export class FactoryScene extends Phaser.Scene {
   private readonly state: GameState = createInitialState();
@@ -471,6 +471,10 @@ export class FactoryScene extends Phaser.Scene {
         onPress = () => this.openUpgradesModal();
       }
 
+      if (label === 'Zones') {
+        onPress = () => this.openZonesModal();
+      }
+
       if (label === 'Settings') {
         onPress = () => this.openSettingsModal();
       }
@@ -506,6 +510,11 @@ export class FactoryScene extends Phaser.Scene {
     this.renderActiveModal();
   }
 
+  private openZonesModal(): void {
+    this.activeModal = 'zones';
+    this.renderActiveModal();
+  }
+
   private closeModal(): void {
     this.activeModal = undefined;
     this.modalPanel?.destroy();
@@ -522,6 +531,10 @@ export class FactoryScene extends Phaser.Scene {
 
     if (this.activeModal === 'upgrades') {
       this.renderUpgradesModal();
+    }
+
+    if (this.activeModal === 'zones') {
+      this.renderZonesModal();
     }
   }
 
@@ -616,6 +629,91 @@ export class FactoryScene extends Phaser.Scene {
     const note = addLabel(
       this,
       'Upgrade purchases are not added yet',
+      rowX,
+      modal.panelRect.y + modal.panelRect.height - (compact ? 34 : 40),
+      compact ? 9 : 11,
+      '#74594c',
+      rowWidth,
+    );
+    note.setFontStyle('700');
+
+    modal.addContent(...rowObjects, note);
+  }
+
+  private renderZonesModal(): void {
+    const height = this.scale.height;
+    const compact = height < 720;
+    const modal = createModalPanel(this, {
+      depth: modalDepth,
+      onClose: () => this.closeModal(),
+      subtitle: 'โซนปัญหาชีวิต',
+      title: 'Zones',
+    });
+    this.modalPanel = modal;
+
+    const visibleZones = zones.slice(0, 3);
+    const rowGap = compact ? 8 : 10;
+    const rowHeight = compact ? 76 : 86;
+    const rowX = modal.contentRect.x;
+    const rowWidth = modal.contentRect.width;
+    const rowStartY = modal.contentRect.y;
+    const buttonWidth = compact ? 62 : 76;
+    const contentWidth = rowWidth - buttonWidth - 28;
+    const rowObjects = visibleZones.flatMap((zone, index) => {
+      const y = rowStartY + index * (rowHeight + rowGap);
+      const current = zone.id === this.state.currentZoneId;
+      const unlocked = zone.unlockedByDefault || this.state.unlockedZoneIds.includes(zone.id);
+      const status = current ? 'Current' : unlocked ? 'Unlocked' : 'Locked';
+      const actionLabel = current ? 'Current' : compact ? 'Soon' : 'ยังไม่เปิด';
+      const rowPanel = addPanel(this, { x: rowX, y, width: rowWidth, height: rowHeight }, current ? colors.panelServed : colors.panelAlt, 12);
+      const name = addLabel(this, zone.displayName, rowX + 12, y + 8, compact ? 12 : 14, '#2b2018', contentWidth);
+      const description = addLabel(this, zone.description, rowX + 12, y + (compact ? 29 : 32), compact ? 8 : 10, '#74594c', contentWidth);
+      const requirement = addLabel(
+        this,
+        zone.unlockRequirementText ?? (current ? 'Starter zone' : 'Unlock requirement not added yet'),
+        rowX + 12,
+        y + rowHeight - (compact ? 18 : 21),
+        compact ? 8 : 10,
+        '#2b2018',
+        contentWidth,
+      );
+      const actionRect = {
+        x: rowX + rowWidth - buttonWidth - 10,
+        y: y + rowHeight / 2 - (compact ? 14 : 16),
+        width: buttonWidth,
+        height: compact ? 28 : 32,
+      };
+      const actionButton = addPanel(this, actionRect, current ? colors.panelServed : colors.panelEmpty, 10);
+      const action = addLabel(
+        this,
+        actionLabel,
+        actionRect.x + actionRect.width / 2,
+        actionRect.y + actionRect.height / 2 - (compact ? 6 : 7),
+        compact ? 8 : 10,
+        '#74594c',
+        actionRect.width,
+      );
+      const statusLabel = addLabel(
+        this,
+        status,
+        rowX + rowWidth - buttonWidth - 10,
+        y + 8,
+        compact ? 8 : 9,
+        current ? '#2f7d32' : '#74594c',
+        buttonWidth,
+      );
+      name.setFontStyle('800');
+      description.setFontStyle('600');
+      requirement.setFontStyle('800');
+      action.setOrigin(0.5, 0);
+      action.setFontStyle('800');
+      statusLabel.setFontStyle('900');
+      return [rowPanel, name, description, requirement, actionButton, action, statusLabel];
+    });
+
+    const note = addLabel(
+      this,
+      'Zone switching is not added yet',
       rowX,
       modal.panelRect.y + modal.panelRect.height - (compact ? 34 : 40),
       compact ? 9 : 11,
