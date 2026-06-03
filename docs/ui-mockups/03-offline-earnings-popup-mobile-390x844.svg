@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="446" height="880" viewBox="0 0 446 880" role="img" aria-label="Idle Excuse Factory offline earnings popup mockup">
+  <title>Idle Excuse Factory offline earnings popup mockup</title>
+  <defs>
+    <linearGradient id="warmBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff2cc"/>
+      <stop offset="1" stop-color="#f8dca0"/>
+    </linearGradient>
+    <linearGradient id="cardGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fffdf5"/>
+      <stop offset="1" stop-color="#ffedbc"/>
+    </linearGradient>
+    <linearGradient id="buttonGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffcc66"/>
+      <stop offset="1" stop-color="#ff9f1c"/>
+    </linearGradient>
+    <style>
+  .bg { fill: #F8EBCB; }
+  .phone { fill: #fff7e6; stroke: #2b2018; stroke-width: 3; }
+  .panel { fill: #fffaf0; stroke: #4e342e; stroke-width: 2; }
+  .panelSoft { fill: #fff2cf; stroke: #6d4c41; stroke-width: 1.5; }
+  .hud { fill: #5a3528; }
+  .footer { fill: #4a2c22; }
+  .accent { fill: #ffb84d; }
+  .accent2 { fill: #ffdd75; }
+  .mint { fill: #d9f99d; }
+  .pink { fill: #ffc4d6; }
+  .blue { fill: #bde0fe; }
+  .green { fill: #80c77b; }
+  .orange { fill: #f59e0b; }
+  .red { fill: #ef6f6c; }
+  .ink { fill: #2b2018; }
+  .muted { fill: #74594c; }
+  .lightText { fill: #fff7e6; }
+  .title { font: 700 22px 'Noto Sans', 'Noto Sans Thai', 'Noto Sans', 'Noto Sans Thai UI', Tahoma, sans-serif; }
+  .h2 { font: 700 16px 'Noto Sans', 'Noto Sans Thai', 'Noto Sans', 'Noto Sans Thai UI', Tahoma, sans-serif; }
+  .body { font: 500 13px 'Noto Sans', 'Noto Sans Thai', 'Noto Sans', 'Noto Sans Thai UI', Tahoma, sans-serif; }
+  .small { font: 500 11px 'Noto Sans', 'Noto Sans Thai', 'Noto Sans', 'Noto Sans Thai UI', Tahoma, sans-serif; }
+  .tiny { font: 500 9px 'Noto Sans', 'Noto Sans Thai', 'Noto Sans', 'Noto Sans Thai UI', Tahoma, sans-serif; }
+  .buttonText { font: 700 13px 'Noto Sans', 'Noto Sans Thai', 'Noto Sans', 'Noto Sans Thai UI', Tahoma, sans-serif; }
+  .navText { font: 700 10px 'Noto Sans', 'Noto Sans Thai', 'Noto Sans', 'Noto Sans Thai UI', Tahoma, sans-serif; }
+  .shadow { filter: drop-shadow(0px 3px 3px rgba(43,32,24,0.18)); }
+</style>
+  </defs>
+  <rect width="100%" height="100%" fill="#efe6d5"/>
+  
+  <rect x="28" y="18" width="390" height="844" rx="32" fill="#1d1511"/>
+  <rect x="38" y="28" width="370" height="824" rx="24" fill="url(#warmBg)" stroke="#2b2018" stroke-width="3"/>
+  <rect x="38" y="28" width="370" height="824" rx="24" fill="#2b2018" opacity="0.26"/>
+  <g transform="translate(72 182)">
+    <rect x="0" y="0" width="306" height="420" rx="26" class="panel shadow" />
+    <circle cx="153" cy="72" r="48" fill="#ffdd75" stroke="#4e342e" stroke-width="3"/>
+    <text x="153" y="82" class="title ink" text-anchor="middle">฿</text>
+    <text x="153" y="148" class="h2 ink" text-anchor="middle">โรงงานทำงานตอนคุณไม่อยู่!</text>
+    <text x="153" y="178" class="body muted" text-anchor="middle">ข้ออ้างถูกขายไประหว่างพัก</text>
+    <g transform="translate(28 210)">
+      <rect x="0" y="0" width="250" height="72" rx="18" fill="#fff2cf" stroke="#4e342e" stroke-width="1.5"/>
+      <text x="22" y="28" class="small muted" text-anchor="start">ได้รับ</text>
+      <text x="22" y="56" class="title ink" text-anchor="start">+1,250 coins</text>
+    </g>
+    <g transform="translate(28 300)">
+      <rect x="0" y="0" width="250" height="38" rx="16" fill="#fffaf0" stroke="#4e342e" stroke-width="1.5"/>
+      <text x="22" y="25" class="body ink" text-anchor="start">เวลาออฟไลน์ที่นับ: 1h 20m</text>
+    </g>
+    <g transform="translate(28 356)">
+      <rect x="0" y="0" width="250" height="44" rx="18" fill="url(#buttonGrad)" stroke="#4e342e" stroke-width="2"/>
+      <text x="125" y="28" class="buttonText ink" text-anchor="middle">รับทรัพย์</text>
+    </g>
+  </g>
+
+</svg>

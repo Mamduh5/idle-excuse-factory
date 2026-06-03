@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="446" height="880" viewBox="0 0 446 880" role="img" aria-label="Idle Excuse Factory layout implementation map">
+  <title>Idle Excuse Factory layout implementation map</title>
+  <defs>
+    <linearGradient id="warmBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff2cc"/>
+      <stop offset="1" stop-color="#f8dca0"/>
+    </linearGradient>
+    <linearGradient id="cardGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fffdf5"/>
+      <stop offset="1" stop-color="#ffedbc"/>
+    </linearGradient>
+    <linearGradient id="buttonGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffcc66"/>
+      <stop offset="1" stop-color="#ff9f1c"/>
+    </linearGradient>
+    <style>
+  .bg { fill: #F8EBCB; }
+  .phone { fill: #fff7e6; stroke: #2b2018; stroke-width: 3; }
+  .panel { fill: #fffaf0; stroke: #4e342e; stroke-width: 2; }
+  .panelSoft { fill: #fff2cf; stroke: #6d4c41; stroke-width: 1.5; }
+  .hud { fill: #5a3528; }
+  .footer { fill: #4a2c22; }
+  .accent { fill: #ffb84d; }
+  .accent2 { fill: #ffdd75; }
+  .mint { fill: #d9f99d; }
+  .pink { fill: #ffc4d6; }
+  .blue { fill: #bde0fe; }
+  .green { fill: #80c77b; }
+  .orange { fill: #f59e0b; }
+  .red { fill: #ef6f6c; }
+  .ink { fill: #2b2018; }
+  .muted { fill: #74594c; }
+  .lightText { fill: #fff7e6; }
+  .title { font: 700 22px 'Noto Sans', 'Noto Sans Thai', 'Noto Sans', 'Noto Sans Thai UI', Tahoma, sans-serif; }
+  .h2 { font: 700 16px 'Noto Sans', 'Noto Sans Thai', 'Noto Sans', 'Noto Sans Thai UI', Tahoma, sans-serif; }
+  .body { font: 500 13px 'Noto Sans', 'Noto Sans Thai', 'Noto Sans', 'Noto Sans Thai UI', Tahoma, sans-serif; }
+  .small { font: 500 11px 'Noto Sans', 'Noto Sans Thai', 'Noto Sans', 'Noto Sans Thai UI', Tahoma, sans-serif; }
+  .tiny { font: 500 9px 'Noto Sans', 'Noto Sans Thai', 'Noto Sans', 'Noto Sans Thai UI', Tahoma, sans-serif; }
+  .buttonText { font: 700 13px 'Noto Sans', 'Noto Sans Thai', 'Noto Sans', 'Noto Sans Thai UI', Tahoma, sans-serif; }
+  .navText { font: 700 10px 'Noto Sans', 'Noto Sans Thai', 'Noto Sans', 'Noto Sans Thai UI', Tahoma, sans-serif; }
+  .shadow { filter: drop-shadow(0px 3px 3px rgba(43,32,24,0.18)); }
+</style>
+  </defs>
+  <rect width="100%" height="100%" fill="#efe6d5"/>
+  
+  <rect x="28" y="18" width="390" height="844" rx="32" fill="#1d1511"/>
+  <rect x="38" y="28" width="370" height="824" rx="24" fill="#fffaf0" stroke="#2b2018" stroke-width="3"/>
+  <g transform="translate(58 52)">
+    <text x="0" y="0" class="title ink" text-anchor="start">Implementation layout map</text>
+    <text x="0" y="24" class="small muted" text-anchor="start">390x844 target frame; scale down to 360x640 by compacting cards</text>
+  </g>
+  <g transform="translate(58 94)">
+    <rect x="0" y="0" width="330" height="82" rx="16" fill="#5a3528"/>
+    <text x="18" y="34" class="h2 lightText" text-anchor="start">Top HUD</text>
+    <text x="180" y="34" class="small lightText" text-anchor="start">10–12% height</text>
+    <text x="18" y="58" class="small lightText" text-anchor="start">Coins / ความเนียน / Zone</text>
+  </g>
+  <g transform="translate(58 190)">
+    <rect x="0" y="0" width="330" height="210" rx="16" fill="#ffedbc" stroke="#4e342e" stroke-width="2"/>
+    <text x="18" y="34" class="h2 ink" text-anchor="start">CustomerQueueView</text>
+    <text x="18" y="58" class="small muted" text-anchor="start">3 customer cards + patience + wanted excuse</text>
+    <rect x="18" y="78" width="294" height="34" rx="10" fill="#fffaf0" stroke="#6d4c41"/>
+    <rect x="18" y="122" width="294" height="34" rx="10" fill="#fffaf0" stroke="#6d4c41"/>
+    <rect x="18" y="166" width="294" height="26" rx="10" fill="#ead7aa"/>
+  </g>
+  <g transform="translate(58 414)">
+    <rect x="0" y="0" width="330" height="178" rx="16" fill="#e6f4c9" stroke="#4e342e" stroke-width="2"/>
+    <text x="18" y="34" class="h2 ink" text-anchor="start">ExcuseCounterView</text>
+    <text x="18" y="58" class="small muted" text-anchor="start">stock / cap / value / locked or empty state</text>
+    <rect x="18" y="78" width="294" height="28" rx="10" fill="#fffaf0" stroke="#6d4c41"/>
+    <rect x="18" y="114" width="294" height="28" rx="10" fill="#fffaf0" stroke="#6d4c41"/>
+    <rect x="18" y="150" width="294" height="18" rx="9" fill="#ead7aa"/>
+  </g>
+  <g transform="translate(58 606)">
+    <rect x="0" y="0" width="330" height="146" rx="16" fill="#ffd6a5" stroke="#4e342e" stroke-width="2"/>
+    <text x="18" y="34" class="h2 ink" text-anchor="start">CraftPanelView</text>
+    <text x="18" y="58" class="small muted" text-anchor="start">buttons at least 44px; ready/crafting/full/locked</text>
+    <rect x="18" y="76" width="294" height="44" rx="14" fill="#ffb84d" stroke="#4e342e"/>
+  </g>
+  <g transform="translate(58 766)">
+    <rect x="0" y="0" width="330" height="58" rx="16" fill="#4a2c22"/>
+    <text x="18" y="34" class="small lightText" text-anchor="start">Footer: Upgrades / Zones / Archive / Settings</text>
+  </g>
+
+</svg>

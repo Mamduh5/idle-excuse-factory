@@ -1,0 +1,158 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="446" height="880" viewBox="0 0 446 880" role="img" aria-label="Idle Excuse Factory main mobile UI mockup">
+  <title>Idle Excuse Factory main mobile UI mockup</title>
+  <defs>
+    <linearGradient id="warmBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff2cc"/>
+      <stop offset="1" stop-color="#f8dca0"/>
+    </linearGradient>
+    <linearGradient id="cardGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fffdf5"/>
+      <stop offset="1" stop-color="#ffedbc"/>
+    </linearGradient>
+    <linearGradient id="buttonGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffcc66"/>
+      <stop offset="1" stop-color="#ff9f1c"/>
+    </linearGradient>
+    <style>
+  .bg { fill: #F8EBCB; }
+  .phone { fill: #fff7e6; stroke: #2b2018; stroke-width: 3; }
+  .panel { fill: #fffaf0; stroke: #4e342e; stroke-width: 2; }
+  .panelSoft { fill: #fff2cf; stroke: #6d4c41; stroke-width: 1.5; }
+  .hud { fill: #5a3528; }
+  .footer { fill: #4a2c22; }
+  .accent { fill: #ffb84d; }
+  .accent2 { fill: #ffdd75; }
+  .mint { fill: #d9f99d; }
+  .pink { fill: #ffc4d6; }
+  .blue { fill: #bde0fe; }
+  .green { fill: #80c77b; }
+  .orange { fill: #f59e0b; }
+  .red { fill: #ef6f6c; }
+  .ink { fill: #2b2018; }
+  .muted { fill: #74594c; }
+  .lightText { fill: #fff7e6; }
+  .title { font: 700 22px 'Noto Sans', 'Noto Sans Thai', 'Noto Sans', 'Noto Sans Thai UI', Tahoma, sans-serif; }
+  .h2 { font: 700 16px 'Noto Sans', 'Noto Sans Thai', 'Noto Sans', 'Noto Sans Thai UI', Tahoma, sans-serif; }
+  .body { font: 500 13px 'Noto Sans', 'Noto Sans Thai', 'Noto Sans', 'Noto Sans Thai UI', Tahoma, sans-serif; }
+  .small { font: 500 11px 'Noto Sans', 'Noto Sans Thai', 'Noto Sans', 'Noto Sans Thai UI', Tahoma, sans-serif; }
+  .tiny { font: 500 9px 'Noto Sans', 'Noto Sans Thai', 'Noto Sans', 'Noto Sans Thai UI', Tahoma, sans-serif; }
+  .buttonText { font: 700 13px 'Noto Sans', 'Noto Sans Thai', 'Noto Sans', 'Noto Sans Thai UI', Tahoma, sans-serif; }
+  .navText { font: 700 10px 'Noto Sans', 'Noto Sans Thai', 'Noto Sans', 'Noto Sans Thai UI', Tahoma, sans-serif; }
+  .shadow { filter: drop-shadow(0px 3px 3px rgba(43,32,24,0.18)); }
+</style>
+  </defs>
+  <rect width="100%" height="100%" fill="#efe6d5"/>
+  
+  <rect x="28" y="18" width="390" height="844" rx="32" fill="#1d1511"/>
+  <rect x="38" y="28" width="370" height="824" rx="24" fill="url(#warmBg)" stroke="#2b2018" stroke-width="3"/>
+  <rect x="38" y="28" width="370" height="72" rx="24" class="hud"/>
+  <text x="64" y="58" class="small lightText">COINS</text>
+  <text x="64" y="82" class="h2 lightText">1.2K</text>
+  <text x="174" y="58" class="small lightText">ความเนียน</text>
+  <text x="174" y="82" class="h2 lightText">18</text>
+  <text x="288" y="58" class="small lightText">ZONE</text>
+  <text x="288" y="82" class="h2 lightText">Daily</text>
+
+  <g transform="translate(58 116)">
+    <text x="0" y="0" class="title ink" text-anchor="start">โรงงานข้ออ้าง</text>
+    <text x="0" y="24" class="small muted" text-anchor="start">ผลิตข้ออ้างกวนๆ แล้วขายให้คนมีปัญหา</text>
+    <g transform="translate(266,-8)">
+      <rect x="0" y="0" width="78" height="34" rx="17" fill="#fffaf0" stroke="#4e342e" stroke-width="1.5"/>
+      <text x="39" y="22" class="small ink" text-anchor="middle">เนียนผ่าน</text>
+    </g>
+  </g>
+
+  <g transform="translate(56 166)">
+    <rect x="0" y="0" width="334" height="218" rx="18" class="panel shadow" />
+    <text x="18" y="28" class="h2 ink" text-anchor="start">คิวลูกค้าปัญหาเยอะ</text>
+    <text x="226" y="28" class="small muted" text-anchor="start">3 slots</text>
+
+    <g transform="translate(16 46)">
+      <rect x="0" y="0" width="302" height="48" rx="13" class="panelSoft" />
+      
+      <circle cx="28" cy="24" r="21" fill="#ffd6a5" stroke="#4e342e" stroke-width="2"/>
+      <circle cx="20" cy="23" r="2.5" fill="#2b2018"/>
+      <circle cx="36" cy="23" r="2.5" fill="#2b2018"/>
+      <path d="M 15 17 L 23 14" stroke="#2b2018" stroke-width="2"/><path d="M 33 14 L 41 17" stroke="#2b2018" stroke-width="2"/>
+      <path d="M -8 12 Q 0 4 8 12" transform="translate(28,24)" fill="none" stroke="#2b2018" stroke-width="2" stroke-linecap="round"/>
+    
+      <text x="60" y="18" class="body ink" text-anchor="start">พนักงานมาสาย</text>
+      <text x="60" y="36" class="small muted" text-anchor="start">ต้องการ: รถติด</text>
+      <rect x="208" y="30" width="70" height="8" rx="4" fill="#ead7aa"/>
+      <rect x="208" y="30" width="54" height="8" rx="4" fill="#f59e0b"/>
+    </g>
+    <g transform="translate(16 102)">
+      <rect x="0" y="0" width="302" height="48" rx="13" class="panelSoft" />
+      
+      <circle cx="28" cy="24" r="21" fill="#c7f9cc" stroke="#4e342e" stroke-width="2"/>
+      <circle cx="20" cy="23" r="2.5" fill="#2b2018"/>
+      <circle cx="36" cy="23" r="2.5" fill="#2b2018"/>
+      
+      <path d="M -7 10 L 7 10" transform="translate(28,24)" fill="none" stroke="#2b2018" stroke-width="2" stroke-linecap="round"/>
+    
+      <text x="60" y="18" class="body ink" text-anchor="start">คนตอบแชทช้า</text>
+      <text x="60" y="36" class="small muted" text-anchor="start">ต้องการ: แบตหมด</text>
+      <rect x="208" y="30" width="70" height="8" rx="4" fill="#ead7aa"/>
+      <rect x="208" y="30" width="32" height="8" rx="4" fill="#ef6f6c"/>
+    </g>
+    <g transform="translate(16 158)">
+      <rect x="0" y="0" width="302" height="42" rx="13" class="panelSoft" />
+      <text x="26" y="26" class="body muted" text-anchor="start">รอลูกค้าคนต่อไป...</text>
+      <circle cx="258" cy="21" r="10" fill="#ead7aa"/>
+      <circle cx="282" cy="21" r="10" fill="#ead7aa"/>
+    </g>
+  </g>
+
+  <g transform="translate(56 404)">
+    <rect x="0" y="0" width="334" height="176" rx="18" class="panel shadow" />
+    <text x="18" y="28" class="h2 ink" text-anchor="start">คลังข้ออ้าง</text>
+    <text x="208" y="28" class="small muted" text-anchor="start">stock + value</text>
+    <g transform="translate(16 46)">
+      <rect x="0" y="0" width="302" height="34" rx="13" fill="#fffdf5" stroke="#6d4c41" stroke-width="1.5"/>
+      <rect x="8" y="7" width="54" height="20" rx="10" fill="#ffdd75"/>
+      <text x="18" y="22" class="small ink" text-anchor="start">รถติด</text>
+      <text x="86" y="22" class="body ink" text-anchor="start">Stock 3/10</text>
+      <text x="220" y="22" class="small muted" text-anchor="start">+10 coins</text>
+    </g>
+    <g transform="translate(16 86)">
+      <rect x="0" y="0" width="302" height="34" rx="13" fill="#fffdf5" stroke="#6d4c41" stroke-width="1.5"/>
+      <rect x="8" y="7" width="62" height="20" rx="10" fill="#bde0fe"/>
+      <text x="18" y="22" class="small ink" text-anchor="start">แบตหมด</text>
+      <text x="86" y="22" class="body ink" text-anchor="start">Stock 1/8</text>
+      <text x="220" y="22" class="small muted" text-anchor="start">+12 coins</text>
+    </g>
+    <g transform="translate(16 126)">
+      <rect x="0" y="0" width="302" height="34" rx="13" fill="#f2e7d0" stroke="#6d4c41" stroke-width="1.5"/>
+      <rect x="8" y="7" width="96" height="20" rx="10" fill="#ffc4d6"/>
+      <text x="16" y="22" class="tiny ink" text-anchor="start">เพิ่งเห็นข้อความ</text>
+      <text x="122" y="22" class="body ink" text-anchor="start">Stock 0/6</text>
+      <text x="222" y="22" class="small muted" text-anchor="start">empty</text>
+    </g>
+  </g>
+
+  <g transform="translate(56 596)">
+    <rect x="0" y="0" width="334" height="166" rx="18" class="panel shadow" />
+    <text x="18" y="28" class="h2 ink" text-anchor="start">แผงผลิตข้ออ้าง</text>
+    <g transform="translate(16 44)">
+      <rect x="0" y="0" width="302" height="38" rx="15" fill="url(#buttonGrad)" stroke="#4e342e" stroke-width="2"/>
+      <text x="151" y="25" class="buttonText ink" text-anchor="middle">ผลิต รถติด</text>
+    </g>
+    <g transform="translate(16 88)">
+      <rect x="0" y="0" width="302" height="38" rx="15" fill="#8ecae6" stroke="#4e342e" stroke-width="2"/>
+      <text x="151" y="25" class="buttonText ink" text-anchor="middle">กำลังผลิต แบตหมด... 2s</text>
+    </g>
+    <g transform="translate(16 132)">
+      <rect x="0" y="0" width="302" height="28" rx="14" fill="#ead7aa" stroke="#4e342e" stroke-width="1.5"/>
+      <text x="151" y="19" class="small muted" text-anchor="middle">เพิ่งเห็นข้อความ stock หมดไว!</text>
+    </g>
+  </g>
+
+  <g transform="translate(38 776)">
+    <rect x="0" y="0" width="370" height="76" rx="22" class="footer"/>
+    <g transform="translate(16 14)"><rect x="0" y="0" width="78" height="42" rx="21.0" fill="#ffdd75" stroke="#2b2018" stroke-width="1.5"/><text x="39.0" y="25.0" class="small" fill="#2b2018" text-anchor="middle">Upgrades</text></g>
+    <g transform="translate(105 14)"><rect x="0" y="0" width="68" height="42" rx="21.0" fill="#fffaf0" stroke="#2b2018" stroke-width="1.5"/><text x="34.0" y="25.0" class="small" fill="#2b2018" text-anchor="middle">Zones</text></g>
+    <g transform="translate(184 14)"><rect x="0" y="0" width="78" height="42" rx="21.0" fill="#fffaf0" stroke="#2b2018" stroke-width="1.5"/><text x="39.0" y="25.0" class="small" fill="#2b2018" text-anchor="middle">Archive</text></g>
+    <g transform="translate(278 14)"><rect x="0" y="0" width="54" height="42" rx="21.0" fill="#fffaf0" stroke="#2b2018" stroke-width="1.5"/><text x="27.0" y="25.0" class="small" fill="body" text-anchor="middle">⚙</text></g>
+  </g>
+
+</svg>
