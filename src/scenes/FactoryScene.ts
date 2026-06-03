@@ -20,12 +20,16 @@ import { inset, type Rect } from '../utils/layout';
 
 const servedFeedbackDurationMs = 1500;
 const stockFlashDurationMs = 600;
+const modalDepth = 1000;
 type StockFlashKind = 'craft' | 'consume';
+type ActiveModal = 'settings';
 
 export class FactoryScene extends Phaser.Scene {
   private readonly state: GameState = createInitialState();
   private readonly customersById = new Map(customers.map((customer) => [customer.id, customer]));
   private uiGroup?: Phaser.GameObjects.Group;
+  private modalGroup?: Phaser.GameObjects.Group;
+  private activeModal?: ActiveModal;
   private toast?: Phaser.GameObjects.Text;
   private toastTween?: Phaser.Tweens.Tween;
   private servedFeedbackTimer?: Phaser.Time.TimerEvent;
@@ -71,10 +75,19 @@ export class FactoryScene extends Phaser.Scene {
     this.renderExcuseCounter(layout);
     this.renderCraftPanel(layout);
     this.renderFooter(layout);
+    this.renderActiveModal();
   }
 
   private addToUi(...items: Phaser.GameObjects.GameObject[]): void {
     this.uiGroup?.addMultiple(items);
+  }
+
+  private addToModal(...items: Phaser.GameObjects.GameObject[]): void {
+    items.forEach((item) => {
+      (item as Phaser.GameObjects.GameObject & { setDepth: (depth: number) => Phaser.GameObjects.GameObject })
+        .setDepth(modalDepth + 1);
+    });
+    this.modalGroup?.addMultiple(items);
   }
 
   private renderHud(layout: FactoryLayout): void {
@@ -459,24 +472,132 @@ export class FactoryScene extends Phaser.Scene {
     const labels = ['Upgrades', 'Zones', 'Archive', 'Settings'];
     const gap = 6;
     const width = (inner.width - gap * (labels.length - 1)) / labels.length;
-    const buttons = labels.map((label, index) => addButton(
-      this,
-      {
-        x: inner.x + index * (width + gap),
-        y: inner.y,
-        width,
-        height: inner.height,
-      },
-      label,
-      () => this.showToast(`${label} panel coming soon`),
-      {
-        fontSize: layout.compact ? 10 : 11,
-        fillColor: 0xffdd75,
-        pressedColor: colors.accent,
-      },
-    ));
+    const buttons = labels.map((label, index) => {
+      const onPress = label === 'Settings'
+        ? () => this.openSettingsModal()
+        : () => this.showToast(`${label} panel coming soon`);
+
+      return addButton(
+        this,
+        {
+          x: inner.x + index * (width + gap),
+          y: inner.y,
+          width,
+          height: inner.height,
+        },
+        label,
+        onPress,
+        {
+          fontSize: layout.compact ? 10 : 11,
+          fillColor: 0xffdd75,
+          pressedColor: colors.accent,
+        },
+      );
+    });
 
     this.addToUi(panel, ...buttons.flatMap((button) => button.group.getChildren()));
+  }
+
+  private openSettingsModal(): void {
+    this.activeModal = 'settings';
+    this.renderActiveModal();
+  }
+
+  private closeModal(): void {
+    this.activeModal = undefined;
+    this.modalGroup?.destroy(true);
+    this.modalGroup = undefined;
+  }
+
+  private renderActiveModal(): void {
+    this.modalGroup?.destroy(true);
+    this.modalGroup = undefined;
+
+    if (this.activeModal === 'settings') {
+      this.renderSettingsModal();
+    }
+  }
+
+  private renderSettingsModal(): void {
+    const width = this.scale.width;
+    const height = this.scale.height;
+    this.modalGroup = this.add.group();
+
+    const dim = this.add.graphics()
+      .setDepth(modalDepth)
+      .fillStyle(0x2b2018, 0.36)
+      .fillRect(0, 0, width, height);
+    const inputBlocker = this.add.zone(0, 0, width, height)
+      .setOrigin(0)
+      .setDepth(modalDepth)
+      .setInteractive();
+    inputBlocker.on('pointerup', () => {
+      // Intentionally block background input; outside-tap close can be added later.
+    });
+    this.modalGroup.addMultiple([dim, inputBlocker]);
+
+    const margin = Math.max(16, Math.min(28, Math.round(width * 0.06)));
+    const panelWidth = Math.min(width - margin * 2, 334);
+    const panelHeight = Math.min(height - margin * 2, height < 720 ? 338 : 386);
+    const panelRect: Rect = {
+      x: (width - panelWidth) / 2,
+      y: (height - panelHeight) / 2,
+      width: panelWidth,
+      height: panelHeight,
+    };
+    const headerHeight = height < 720 ? 56 : 66;
+    const panel = addPanel(this, panelRect, colors.panel, 18);
+    const header = this.add.graphics()
+      .fillStyle(colors.hud, 1)
+      .fillRoundedRect(panelRect.x, panelRect.y, panelRect.width, headerHeight, 18)
+      .fillRect(panelRect.x, panelRect.y + headerHeight - 18, panelRect.width, 18);
+    const title = addLabel(this, 'Settings', panelRect.x + 18, panelRect.y + 18, height < 720 ? 18 : 21, '#fff7e6');
+    const subtitle = addLabel(this, 'ตั้งค่า', panelRect.x + 18, panelRect.y + (height < 720 ? 39 : 45), height < 720 ? 10 : 11, '#fff7e6');
+
+    const closeSize = height < 720 ? 34 : 38;
+    const closeButton = addButton(
+      this,
+      {
+        x: panelRect.x + panelRect.width - closeSize - 14,
+        y: panelRect.y + (headerHeight - closeSize) / 2,
+        width: closeSize,
+        height: closeSize,
+      },
+      'X',
+      () => this.closeModal(),
+      {
+        fontSize: height < 720 ? 14 : 16,
+        fillColor: colors.panel,
+        pressedColor: colors.panelNeeded,
+      },
+    );
+
+    const rows = ['Sound: On', 'Music: On', 'Save: Not added yet', 'Reset Save: Not added yet'];
+    const rowGap = height < 720 ? 9 : 12;
+    const rowHeight = height < 720 ? 42 : 48;
+    const rowX = panelRect.x + 18;
+    const rowWidth = panelRect.width - 36;
+    const rowStartY = panelRect.y + headerHeight + (height < 720 ? 18 : 24);
+    const rowObjects = rows.flatMap((row, index) => {
+      const y = rowStartY + index * (rowHeight + rowGap);
+      const rowPanel = addPanel(this, { x: rowX, y, width: rowWidth, height: rowHeight }, colors.panelAlt, 12);
+      const rowLabel = addLabel(this, row, rowX + 14, y + rowHeight / 2 - 8, height < 720 ? 12 : 14, '#2b2018', rowWidth - 28);
+      rowLabel.setFontStyle('700');
+      return [rowPanel, rowLabel];
+    });
+
+    const note = addLabel(
+      this,
+      'Placeholder only',
+      rowX,
+      panelRect.y + panelRect.height - (height < 720 ? 34 : 40),
+      height < 720 ? 10 : 11,
+      '#74594c',
+      rowWidth,
+    );
+    note.setFontStyle('700');
+
+    this.addToModal(panel, header, title, subtitle, ...closeButton.group.getChildren(), ...rowObjects, note);
   }
 
   private handleCraft(excuseId: ExcuseId): void {
