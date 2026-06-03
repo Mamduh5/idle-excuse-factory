@@ -18,7 +18,7 @@ export function createInitialState(nowMs = Date.now()): GameState {
       {
         instanceId: 'starter-late-worker',
         customerId: 'late_worker',
-        wantedExcuseId: 'traffic_jam',
+        wantedExcuseIds: ['traffic_jam'],
         patienceRemainingMs: 0,
         createdAtMs: nowMs,
         status: 'waiting',
@@ -26,7 +26,7 @@ export function createInitialState(nowMs = Date.now()): GameState {
       {
         instanceId: 'starter-missing-student',
         customerId: 'missing_student',
-        wantedExcuseId: 'just_saw_message',
+        wantedExcuseIds: ['just_saw_message'],
         patienceRemainingMs: 0,
         createdAtMs: nowMs,
         status: 'waiting',
@@ -34,7 +34,7 @@ export function createInitialState(nowMs = Date.now()): GameState {
       {
         instanceId: 'starter-ghost-texter',
         customerId: 'ghost_texter',
-        wantedExcuseId: 'battery_dead',
+        wantedExcuseIds: ['battery_dead', 'just_saw_message'],
         patienceRemainingMs: 0,
         createdAtMs: nowMs,
         status: 'waiting',

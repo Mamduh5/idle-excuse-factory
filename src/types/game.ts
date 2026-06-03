@@ -21,7 +21,7 @@ export type CustomerDefinition = {
   id: string;
   displayName: string;
   problemText: string;
-  wantedExcuseId: ExcuseId;
+  wantedExcuseIds: ExcuseId[];
   coinMultiplier: number;
   smoothnessReward: number;
 };
@@ -29,7 +29,7 @@ export type CustomerDefinition = {
 export type CustomerInstance = {
   instanceId: string;
   customerId: CustomerDefinition['id'];
-  wantedExcuseId: ExcuseId;
+  wantedExcuseIds: ExcuseId[];
   patienceRemainingMs: number;
   createdAtMs: number;
   status: 'waiting' | 'served';

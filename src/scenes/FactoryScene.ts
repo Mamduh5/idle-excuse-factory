@@ -264,7 +264,7 @@ export class FactoryScene extends Phaser.Scene {
     }
 
     const title = definition.displayName;
-    const wanted = excuses[customer.wantedExcuseId].displayName;
+    const wanted = this.formatWantedExcuseNames(customer.wantedExcuseIds);
     const name = addLabel(this, title, rect.x + 10, rect.y + 6, compact ? 11 : 13, '#2b2018', rect.width * 0.58);
     const want = addLabel(
       this,
@@ -374,9 +374,11 @@ export class FactoryScene extends Phaser.Scene {
     const buttonGap = layout.compact ? 5 : 7;
     const buttonTop = inner.y + (layout.compact ? 22 : 30);
     const buttonHeight = Math.max(33, Math.min(44, Math.floor((inner.height - (buttonTop - inner.y) - buttonGap * 2) / 3)));
+    const selectedCustomer = this.getSelectedCustomer();
+    const missingAllAcceptedStock = selectedCustomer !== undefined && !hasMatchingStock(this.state, selectedCustomer);
     const buttons = starterExcuseIds.map((id, index) => {
       const selectedWants = this.selectedCustomerWants(id);
-      const stockMissing = selectedWants && this.state.excuseStock[id] <= 0;
+      const stockMissing = selectedWants && missingAllAcceptedStock;
       const label = stockMissing
         ? `ผลิต ${excuses[id].displayName} · ควรผลิต`
         : `ผลิต ${excuses[id].displayName}`;
@@ -504,6 +506,10 @@ export class FactoryScene extends Phaser.Scene {
 
   private selectedCustomerWants(excuseId: ExcuseId): boolean {
     return this.getSelectedWantedExcuseIds().includes(excuseId);
+  }
+
+  private formatWantedExcuseNames(excuseIds: ExcuseId[]): string {
+    return excuseIds.map((excuseId) => excuses[excuseId].displayName).join(' / ');
   }
 
   private getServeStatusText(): string {

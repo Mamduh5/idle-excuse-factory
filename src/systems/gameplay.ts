@@ -78,11 +78,18 @@ export function getWaitingCustomerByInstanceId(state: GameState, instanceId: str
 }
 
 export function getWantedExcuseIds(customer: CustomerInstance | undefined): ExcuseId[] {
-  return customer ? [customer.wantedExcuseId] : [];
+  return customer ? customer.wantedExcuseIds : [];
 }
 
 export function hasMatchingStock(state: GameState, customer: CustomerInstance | undefined): boolean {
-  return getWantedExcuseIds(customer).some((excuseId) => sanitizeCount(state.excuseStock[excuseId]) > 0);
+  return findFirstAvailableWantedExcuse(state, customer) !== undefined;
+}
+
+export function findFirstAvailableWantedExcuse(
+  state: GameState,
+  customer: CustomerInstance | undefined,
+): ExcuseId | undefined {
+  return getWantedExcuseIds(customer).find((excuseId) => sanitizeCount(state.excuseStock[excuseId]) > 0);
 }
 
 export function canRefillCustomerBatch(state: GameState): boolean {
@@ -112,7 +119,7 @@ function createCustomerBatch(batchNumber: number, nowMs: number): CustomerInstan
   return customers.slice(0, 3).map((customer, index) => ({
     instanceId: `batch-${batchNumber}-${index}-${customer.id}`,
     customerId: customer.id,
-    wantedExcuseId: customer.wantedExcuseId,
+    wantedExcuseIds: [...customer.wantedExcuseIds],
     patienceRemainingMs: 0,
     createdAtMs: nowMs,
     status: 'waiting',
@@ -125,8 +132,13 @@ function serveCustomer(
   customer: CustomerDefinition,
   nowMs: number,
 ): ServeResult {
-  const excuse = excuses[instance.wantedExcuseId];
-  const stock = sanitizeCount(state.excuseStock[instance.wantedExcuseId]);
+  const excuseId = findFirstAvailableWantedExcuse(state, instance);
+  if (!excuseId) {
+    return emptyServeResult();
+  }
+
+  const excuse = excuses[excuseId];
+  const stock = sanitizeCount(state.excuseStock[excuseId]);
 
   if (instance.status !== 'waiting' || stock <= 0) {
     return emptyServeResult();
@@ -135,7 +147,7 @@ function serveCustomer(
   const coinsGained = sanitizeCount(Math.floor(excuse.baseValue * customer.coinMultiplier));
   const smoothnessGained = sanitizeCount(customer.smoothnessReward);
 
-  state.excuseStock[instance.wantedExcuseId] = Math.max(0, stock - 1);
+  state.excuseStock[excuseId] = Math.max(0, stock - 1);
   state.currencies.coins = sanitizeCount(state.currencies.coins + coinsGained);
   state.currencies.smoothness = sanitizeCount(state.currencies.smoothness + smoothnessGained);
   instance.status = 'served';
@@ -149,7 +161,7 @@ function serveCustomer(
   return {
     served: true,
     customerName: customer.displayName,
-    excuseId: instance.wantedExcuseId,
+    excuseId,
     coinsGained,
     smoothnessGained,
   };
