@@ -19,6 +19,7 @@ import { addButton, addLabel, addPanel } from '../ui/phaserUi';
 import { inset, type Rect } from '../utils/layout';
 
 const servedFeedbackDurationMs = 1500;
+const stockFlashDurationMs = 600;
 
 export class FactoryScene extends Phaser.Scene {
   private readonly state: GameState = createInitialState();
@@ -27,6 +28,8 @@ export class FactoryScene extends Phaser.Scene {
   private toast?: Phaser.GameObjects.Text;
   private toastTween?: Phaser.Tweens.Tween;
   private servedFeedbackTimer?: Phaser.Time.TimerEvent;
+  private stockFlashTimer?: Phaser.Time.TimerEvent;
+  private stockFlashExcuseId?: ExcuseId;
   private selectedCustomerInstanceId?: string;
 
   public constructor() {
@@ -41,6 +44,7 @@ export class FactoryScene extends Phaser.Scene {
   public destroy(): void {
     this.scale.off(Phaser.Scale.Events.RESIZE, this.renderFactory, this);
     this.servedFeedbackTimer?.remove();
+    this.stockFlashTimer?.remove();
   }
 
   private renderFactory(): void {
@@ -370,6 +374,7 @@ export class FactoryScene extends Phaser.Scene {
   private renderExcuseCard(rect: Rect, excuseId: ExcuseId, stock: number, maxStock: number, compact: boolean): Phaser.GameObjects.GameObject[] {
     const selectedWants = this.selectedCustomerWants(excuseId);
     const ready = selectedWants && stock > 0;
+    const flashing = this.stockFlashExcuseId === excuseId;
     const bg = addPanel(this, rect, ready ? colors.panelServed : selectedWants ? colors.panelNeeded : colors.panel, 10);
     const border = selectedWants ? this.addCueBorder(rect, ready) : undefined;
     const label = excuses[excuseId].displayName;
@@ -377,7 +382,39 @@ export class FactoryScene extends Phaser.Scene {
     const title = addLabel(this, label, rect.x + 10, rect.y + (compact ? 6 : 7), compact ? 11 : 13, '#2b2018', rect.width * 0.55);
     const count = addLabel(this, `${countPrefix} ${stock}/${maxStock}`, rect.x + rect.width * 0.58, rect.y + (compact ? 6 : 7), compact ? 10 : 12, selectedWants ? '#2b2018' : '#74594c', rect.width * 0.39);
     count.setFontStyle('700');
-    return [bg, ...(border ? [border] : []), title, count];
+    const flashObjects = flashing ? this.renderStockFlash(rect, compact) : [];
+    return [bg, ...(border ? [border] : []), title, count, ...flashObjects];
+  }
+
+  private renderStockFlash(rect: Rect, compact: boolean): Phaser.GameObjects.GameObject[] {
+    const glow = this.add.graphics()
+      .lineStyle(4, colors.accentPressed, 1)
+      .strokeRoundedRect(rect.x + 3, rect.y + 3, rect.width - 6, rect.height - 6, 10);
+    const minusOne = addLabel(
+      this,
+      '-1',
+      rect.x + rect.width - (compact ? 42 : 48),
+      rect.y + rect.height / 2 - (compact ? 9 : 11),
+      compact ? 14 : 16,
+      '#d97706',
+      36,
+    );
+    minusOne.setFontStyle('900');
+
+    this.tweens.add({
+      targets: [glow, minusOne],
+      alpha: { from: 1, to: 0 },
+      duration: stockFlashDurationMs,
+      ease: 'Quad.easeOut',
+    });
+    this.tweens.add({
+      targets: minusOne,
+      y: minusOne.y - 8,
+      duration: stockFlashDurationMs,
+      ease: 'Quad.easeOut',
+    });
+
+    return [glow, minusOne];
   }
 
   private renderCraftPanel(layout: FactoryLayout): void {
@@ -481,6 +518,13 @@ export class FactoryScene extends Phaser.Scene {
       return;
     }
 
+    const servedCustomer = this.state.activeCustomers.find((customer) => {
+      return customer.instanceId === this.selectedCustomerInstanceId;
+    });
+    const consumedExcuseId = servedCustomer?.servedReward?.consumedExcuseId ?? result.excuseId;
+    if (consumedExcuseId) {
+      this.scheduleStockFlash(consumedExcuseId);
+    }
     this.selectedCustomerInstanceId = undefined;
     this.renderFactory();
     this.scheduleServedFeedbackRefresh();
@@ -543,6 +587,15 @@ export class FactoryScene extends Phaser.Scene {
   private scheduleServedFeedbackRefresh(): void {
     this.servedFeedbackTimer?.remove();
     this.servedFeedbackTimer = this.time.delayedCall(servedFeedbackDurationMs, () => {
+      this.renderFactory();
+    });
+  }
+
+  private scheduleStockFlash(excuseId: ExcuseId): void {
+    this.stockFlashTimer?.remove();
+    this.stockFlashExcuseId = excuseId;
+    this.stockFlashTimer = this.time.delayedCall(stockFlashDurationMs, () => {
+      this.stockFlashExcuseId = undefined;
       this.renderFactory();
     });
   }
