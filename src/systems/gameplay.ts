@@ -22,15 +22,9 @@ export type ServeResult = {
   smoothnessGained: number;
 };
 
-export type StockChangeResult = {
-  craft: CraftResult;
-  serve: ServeResult;
-};
-
 export type RefillResult = {
   refilled: boolean;
   batchNumber: number;
-  served: ServeResult[];
 };
 
 const customerById = new Map(customers.map((customer) => [customer.id, customer]));
@@ -61,20 +55,9 @@ export function craftExcuse(state: GameState, excuseId: ExcuseId): CraftResult {
   };
 }
 
-export function craftAndAutoServe(state: GameState, excuseId: ExcuseId, nowMs = Date.now()): StockChangeResult {
-  const craft = craftExcuse(state, excuseId);
-  const serve = craft.crafted ? autoServeOneCustomer(state, nowMs) : emptyServeResult();
-  sanitizeCurrencies(state);
-
-  return { craft, serve };
-}
-
-export function autoServeOneCustomer(state: GameState, nowMs = Date.now()): ServeResult {
-  const match = state.activeCustomers.find((customer) => {
-    return customer.status === 'waiting' && sanitizeCount(state.excuseStock[customer.wantedExcuseId]) > 0;
-  });
-
-  if (!match) {
+export function serveCustomerByInstanceId(state: GameState, instanceId: string, nowMs = Date.now()): ServeResult {
+  const match = state.activeCustomers.find((customer) => customer.instanceId === instanceId);
+  if (!match || match.status !== 'waiting') {
     return emptyServeResult();
   }
 
@@ -90,12 +73,11 @@ export function canRefillCustomerBatch(state: GameState): boolean {
   return state.activeCustomers.every((customer) => customer.status !== 'waiting');
 }
 
-export function refillCustomerBatchAndAutoServe(state: GameState, nowMs = Date.now()): RefillResult {
+export function refillCustomerBatch(state: GameState, nowMs = Date.now()): RefillResult {
   if (!canRefillCustomerBatch(state)) {
     return {
       refilled: false,
       batchNumber: state.customerBatchNumber,
-      served: [],
     };
   }
 
@@ -107,21 +89,7 @@ export function refillCustomerBatchAndAutoServe(state: GameState, nowMs = Date.n
   return {
     refilled: true,
     batchNumber,
-    served: autoServeWaitingCustomers(state, nowMs),
   };
-}
-
-function autoServeWaitingCustomers(state: GameState, nowMs: number): ServeResult[] {
-  const served: ServeResult[] = [];
-
-  while (true) {
-    const result = autoServeOneCustomer(state, nowMs);
-    if (!result.served) {
-      return served;
-    }
-
-    served.push(result);
-  }
 }
 
 function createCustomerBatch(batchNumber: number, nowMs: number): CustomerInstance[] {

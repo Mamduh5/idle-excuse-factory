@@ -4,7 +4,12 @@ import { excuses, starterExcuseIds } from '../data/excuses';
 import { zones } from '../data/zones';
 import { colors } from '../rendering/colors';
 import { createInitialState } from '../state/initialState';
-import { canRefillCustomerBatch, craftAndAutoServe, refillCustomerBatchAndAutoServe } from '../systems/gameplay';
+import {
+  canRefillCustomerBatch,
+  craftExcuse,
+  refillCustomerBatch,
+  serveCustomerByInstanceId,
+} from '../systems/gameplay';
 import type { CustomerDefinition, CustomerInstance, ExcuseId, GameState } from '../types/game';
 import { createFactoryLayout, type FactoryLayout } from '../ui/FactoryLayout';
 import { addButton, addLabel, addPanel } from '../ui/phaserUi';
@@ -19,6 +24,7 @@ export class FactoryScene extends Phaser.Scene {
   private toast?: Phaser.GameObjects.Text;
   private toastTween?: Phaser.Tweens.Tween;
   private servedFeedbackTimer?: Phaser.Time.TimerEvent;
+  private selectedCustomerInstanceId?: string;
 
   public constructor() {
     super('FactoryScene');
@@ -35,6 +41,7 @@ export class FactoryScene extends Phaser.Scene {
   }
 
   private renderFactory(): void {
+    this.clearInvalidSelection();
     this.uiGroup?.destroy(true);
     this.toastTween?.stop();
     this.toast = undefined;
@@ -106,7 +113,25 @@ export class FactoryScene extends Phaser.Scene {
   private renderCustomerQueue(layout: FactoryLayout): void {
     const panel = addPanel(this, layout.customerQueue, colors.panelAlt, 14);
     const inner = inset(layout.customerQueue, layout.compact ? 8 : 11);
-    const heading = addLabel(this, 'Customer Queue', inner.x, inner.y, layout.compact ? 14 : 16, '#2b2018');
+    const serveButtonWidth = layout.compact ? 72 : 118;
+    const heading = addLabel(
+      this,
+      'Customer Queue',
+      inner.x,
+      inner.y,
+      layout.compact ? 14 : 16,
+      '#2b2018',
+      inner.width - serveButtonWidth - 8,
+    );
+    const serveAction = this.renderServeAction(
+      {
+        x: inner.x + inner.width - serveButtonWidth,
+        y: inner.y - 1,
+        width: serveButtonWidth,
+        height: layout.compact ? 21 : 25,
+      },
+      layout.compact,
+    );
     const slotGap = layout.compact ? 5 : 7;
     const slotTop = inner.y + (layout.compact ? 22 : 29);
     const slotHeight = Math.max(34, Math.floor((inner.height - (slotTop - inner.y) - slotGap * 2) / 3));
@@ -124,7 +149,29 @@ export class FactoryScene extends Phaser.Scene {
       );
     });
 
-    this.addToUi(panel, heading, ...slots);
+    this.addToUi(panel, heading, ...serveAction, ...slots);
+  }
+
+  private renderServeAction(rect: Rect, compact: boolean): Phaser.GameObjects.GameObject[] {
+    if (!this.selectedCustomerInstanceId) {
+      const disabled = addPanel(this, rect, colors.panelEmpty, 10);
+      const hint = addLabel(this, compact ? 'เลือกก่อน' : 'เลือกก่อน', rect.x + rect.width / 2, rect.y + rect.height / 2 - 7, compact ? 9 : 10, '#74594c');
+      hint.setOrigin(0.5, 0);
+      return [disabled, hint];
+    }
+
+    const button = addButton(
+      this,
+      rect,
+      compact ? 'เสิร์ฟ' : 'เสิร์ฟข้ออ้าง',
+      () => this.handleServeSelected(),
+      {
+        fontSize: compact ? 10 : 12,
+        fillColor: colors.panelServed,
+        pressedColor: colors.accent,
+      },
+    );
+    return button.group.getChildren();
   }
 
   private renderCustomerSlot(
@@ -137,12 +184,14 @@ export class FactoryScene extends Phaser.Scene {
   ): Phaser.GameObjects.GameObject[] {
     const definition = this.customersById.get(customer.customerId);
     const recentlyServed = this.isRecentlyServed(customer, nowMs);
+    const selected = this.selectedCustomerInstanceId === customer.instanceId && customer.status === 'waiting';
     const bg = addPanel(
       this,
       rect,
       recentlyServed ? colors.panelServed : customer.status === 'served' ? colors.panelEmpty : colors.panel,
       10,
     );
+    const selectedBorder = selected ? this.addSelectedBorder(rect) : undefined;
 
     if (definition && recentlyServed) {
       const sold = addLabel(this, 'ขายสำเร็จ!', rect.x + 10, rect.y + 6, compact ? 12 : 14, '#2b2018', rect.width * 0.42);
@@ -206,7 +255,18 @@ export class FactoryScene extends Phaser.Scene {
     want.setFontStyle('700');
     const status = addLabel(this, this.getCustomerStatus(definition), rect.x + 10, rect.y + rect.height - (compact ? 17 : 20), compact ? 9 : 11, '#74594c', rect.width - 20);
     status.setFontStyle('500');
-    return [bg, name, want, status];
+    const hitArea = this.add.zone(rect.x, rect.y, rect.width, rect.height)
+      .setOrigin(0)
+      .setInteractive({ useHandCursor: true });
+    hitArea.on('pointerup', () => this.selectCustomer(customer.instanceId));
+
+    return [bg, ...(selectedBorder ? [selectedBorder] : []), name, want, status, hitArea];
+  }
+
+  private addSelectedBorder(rect: Rect): Phaser.GameObjects.Graphics {
+    return this.add.graphics()
+      .lineStyle(4, colors.accentPressed, 1)
+      .strokeRoundedRect(rect.x + 2, rect.y + 2, rect.width - 4, rect.height - 4, 10);
   }
 
   private getEmptySlotText(queueCleared: boolean, slotIndex: number): string {
@@ -320,26 +380,16 @@ export class FactoryScene extends Phaser.Scene {
   }
 
   private handleCraft(excuseId: ExcuseId): void {
-    const result = craftAndAutoServe(this.state, excuseId);
+    const result = craftExcuse(this.state, excuseId);
     const excuse = excuses[excuseId];
     this.renderFactory();
 
-    if (!result.craft.crafted) {
+    if (!result.crafted) {
       this.showToast('ข้ออ้างเต็มแล้ว!');
       return;
     }
 
-    if (result.serve.served) {
-      this.scheduleServedFeedbackRefresh();
-      this.showToast(`ขายข้ออ้างสำเร็จ +${result.serve.coinsGained} coins`);
-      return;
-    }
-
-    this.showToast(
-      this.hasWaitingCustomerForExcuse(excuseId)
-        ? `ผลิต ${excuse.displayName} แล้ว ${result.craft.stock}/${result.craft.cap}`
-        : 'ยังไม่มีลูกค้าที่ต้องใช้ข้อนี้',
-    );
+    this.showToast(`ผลิต ${excuse.displayName} แล้ว ${result.stock}/${result.cap}`);
   }
 
   private handleNextBatch(): void {
@@ -348,7 +398,8 @@ export class FactoryScene extends Phaser.Scene {
       return;
     }
 
-    const result = refillCustomerBatchAndAutoServe(this.state);
+    const result = refillCustomerBatch(this.state);
+    this.selectedCustomerInstanceId = undefined;
     this.renderFactory();
 
     if (!result.refilled) {
@@ -356,20 +407,47 @@ export class FactoryScene extends Phaser.Scene {
       return;
     }
 
-    if (result.served.length > 0) {
-      const coins = result.served.reduce((total, served) => total + served.coinsGained, 0);
-      this.scheduleServedFeedbackRefresh();
-      this.showToast(`เรียกชุดต่อไป และขายได้ +${coins} coins`);
-      return;
-    }
-
     this.showToast('เรียกลูกค้าชุดต่อไปแล้ว');
   }
 
-  private hasWaitingCustomerForExcuse(excuseId: ExcuseId): boolean {
-    return this.state.activeCustomers.some((customer) => {
-      return customer.status === 'waiting' && customer.wantedExcuseId === excuseId;
-    });
+  private handleServeSelected(): void {
+    if (!this.selectedCustomerInstanceId) {
+      this.showToast('เลือกลูกค้าก่อน');
+      return;
+    }
+
+    const result = serveCustomerByInstanceId(this.state, this.selectedCustomerInstanceId);
+    if (!result.served) {
+      this.showToast('ยังไม่มีข้ออ้างที่ลูกค้าต้องการ');
+      return;
+    }
+
+    this.selectedCustomerInstanceId = undefined;
+    this.renderFactory();
+    this.scheduleServedFeedbackRefresh();
+    this.showToast(`ขายข้ออ้างสำเร็จ +${result.coinsGained} coins`);
+  }
+
+  private selectCustomer(instanceId: string): void {
+    const customer = this.state.activeCustomers.find((candidate) => candidate.instanceId === instanceId);
+    if (!customer || customer.status !== 'waiting') {
+      return;
+    }
+
+    this.selectedCustomerInstanceId = instanceId;
+    this.renderFactory();
+    this.showToast('เลือกลูกค้าแล้ว');
+  }
+
+  private clearInvalidSelection(): void {
+    if (!this.selectedCustomerInstanceId) {
+      return;
+    }
+
+    const selected = this.state.activeCustomers.find((customer) => customer.instanceId === this.selectedCustomerInstanceId);
+    if (!selected || selected.status !== 'waiting') {
+      this.selectedCustomerInstanceId = undefined;
+    }
   }
 
   private scheduleServedFeedbackRefresh(): void {
