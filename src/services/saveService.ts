@@ -15,6 +15,7 @@ import type {
 export const saveStorageKey = 'idle-excuse-factory-save-v1';
 
 export type LoadSaveResult = {
+  lastActiveAtMs?: number;
   state: GameState;
   status: 'loaded' | 'new' | 'error';
 };
@@ -37,7 +38,12 @@ export function loadGameState(nowMs = Date.now()): LoadSaveResult {
 
   try {
     const parsed = JSON.parse(rawSave) as unknown;
+    if (!isSaveDataV1Like(parsed)) {
+      return { state: createInitialState(nowMs), status: 'error' };
+    }
+
     return {
+      lastActiveAtMs: sanitizeOptionalTimestamp(parsed.lastActiveAtMs),
       state: normalizeSavedGame(parsed, nowMs),
       status: 'loaded',
     };
@@ -220,6 +226,14 @@ function sanitizeCount(value: unknown): number {
 
 function sanitizeTimestamp(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+}
+
+function sanitizeOptionalTimestamp(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined;
+}
+
+function isSaveDataV1Like(value: unknown): value is SaveDataV1 {
+  return isRecord(value) && value.version === 1 && isRecord(value.state);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

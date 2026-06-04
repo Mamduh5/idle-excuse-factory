@@ -4,7 +4,7 @@ import { excuses, starterExcuseIds } from '../data/excuses';
 import { upgrades } from '../data/upgrades';
 import { zones } from '../data/zones';
 import { colors } from '../rendering/colors';
-import { clearSavedGame, loadGameState, saveGameState } from '../services';
+import { clearSavedGame, loadGameState, saveGameState, type LoadSaveResult } from '../services';
 import { createInitialState } from '../state/initialState';
 import {
   canRefillCustomerBatch,
@@ -15,6 +15,7 @@ import {
   refillCustomerBatch,
   serveCustomerByInstanceId,
 } from '../systems/gameplay';
+import { calculateOfflineEarnings, type OfflineEarningsResult } from '../systems/offlineEarnings';
 import type { CustomerDefinition, CustomerInstance, ExcuseId, GameState } from '../types/game';
 import { createFactoryLayout, type FactoryLayout } from '../ui/FactoryLayout';
 import { createModalPanel, modalDepth, type ModalPanelHandle } from '../ui/ModalPanel';
@@ -25,7 +26,7 @@ const servedFeedbackDurationMs = 1500;
 const stockFlashDurationMs = 600;
 const autosaveIntervalMs = 12000;
 type StockFlashKind = 'craft' | 'consume';
-type ActiveModal = 'settings' | 'upgrades' | 'zones' | 'archive';
+type ActiveModal = 'settings' | 'upgrades' | 'zones' | 'archive' | 'offlineEarnings';
 
 export class FactoryScene extends Phaser.Scene {
   private state: GameState = createInitialState();
@@ -40,6 +41,7 @@ export class FactoryScene extends Phaser.Scene {
   private stockFlashTimer?: Phaser.Time.TimerEvent;
   private stockFlashExcuseId?: ExcuseId;
   private stockFlashKind?: StockFlashKind;
+  private offlineEarnings?: OfflineEarningsResult;
   private resetSaveArmed = false;
   private selectedCustomerInstanceId?: string;
 
@@ -48,10 +50,16 @@ export class FactoryScene extends Phaser.Scene {
   }
 
   public create(): void {
-    const loadResult = loadGameState();
+    const nowMs = Date.now();
+    const loadResult = loadGameState(nowMs);
     this.state = loadResult.state;
+    const offlineEarnings = this.applyOfflineEarningsOnLoad(loadResult, nowMs);
     this.renderFactory();
-    this.showToast(loadResult.status === 'loaded' ? 'โหลดเซฟสำเร็จ' : 'เริ่มเกมใหม่');
+    if (offlineEarnings) {
+      this.openOfflineEarningsModal(offlineEarnings);
+    } else {
+      this.showToast(loadResult.status === 'loaded' ? 'โหลดเซฟสำเร็จ' : 'เริ่มเกมใหม่');
+    }
     this.autosaveTimer = this.time.addEvent({
       delay: autosaveIntervalMs,
       loop: true,
@@ -540,7 +548,18 @@ export class FactoryScene extends Phaser.Scene {
     this.renderActiveModal();
   }
 
+  private openOfflineEarningsModal(earnings: OfflineEarningsResult): void {
+    this.resetSaveArmed = false;
+    this.offlineEarnings = earnings;
+    this.activeModal = 'offlineEarnings';
+    this.renderActiveModal();
+  }
+
   private closeModal(): void {
+    if (this.activeModal === 'offlineEarnings') {
+      this.offlineEarnings = undefined;
+    }
+
     this.activeModal = undefined;
     this.resetSaveArmed = false;
     this.modalPanel?.destroy();
@@ -566,6 +585,99 @@ export class FactoryScene extends Phaser.Scene {
     if (this.activeModal === 'archive') {
       this.renderArchiveModal();
     }
+
+    if (this.activeModal === 'offlineEarnings') {
+      this.renderOfflineEarningsModal();
+    }
+  }
+
+  private renderOfflineEarningsModal(): void {
+    const earnings = this.offlineEarnings;
+    if (!earnings) {
+      return;
+    }
+
+    const height = this.scale.height;
+    const compact = height < 720;
+    const modal = createModalPanel(this, {
+      depth: modalDepth,
+      onClose: () => this.closeModal(),
+      subtitle: 'ขายข้ออ้างได้ระหว่างพัก',
+      title: 'โรงงานทำงานตอนคุณไม่อยู่!',
+    });
+    this.modalPanel = modal;
+
+    const rowX = modal.contentRect.x;
+    const rowWidth = modal.contentRect.width;
+    const topY = modal.contentRect.y;
+    const body = addLabel(
+      this,
+      'ขายข้ออ้างได้ระหว่างพัก',
+      rowX,
+      topY,
+      compact ? 12 : 14,
+      '#74594c',
+      rowWidth,
+    );
+    const reward = addLabel(
+      this,
+      `ได้รับ +${earnings.coins} coins`,
+      rowX,
+      topY + (compact ? 42 : 50),
+      compact ? 22 : 26,
+      '#2b2018',
+      rowWidth,
+    );
+    const time = addLabel(
+      this,
+      `เวลาออฟไลน์ที่นับ: ${this.formatOfflineMinutes(earnings.cappedSeconds)}m`,
+      rowX,
+      topY + (compact ? 88 : 106),
+      compact ? 11 : 13,
+      '#74594c',
+      rowWidth,
+    );
+    const capped = earnings.totalAwaySeconds > earnings.cappedSeconds
+      ? addLabel(
+        this,
+        'นับสูงสุด 120m สำหรับ MVP',
+        rowX,
+        topY + (compact ? 110 : 130),
+        compact ? 9 : 11,
+        '#74594c',
+        rowWidth,
+      )
+      : undefined;
+    const buttonHeight = compact ? 38 : 44;
+    const button = addButton(
+      this,
+      {
+        x: rowX,
+        y: modal.panelRect.y + modal.panelRect.height - buttonHeight - (compact ? 22 : 28),
+        width: rowWidth,
+        height: buttonHeight,
+      },
+      'รับทรัพย์',
+      () => this.closeModal(),
+      {
+        fontSize: compact ? 13 : 15,
+        fillColor: colors.accent,
+        pressedColor: colors.accentPressed,
+      },
+    );
+
+    body.setFontStyle('700');
+    reward.setFontStyle('900');
+    time.setFontStyle('800');
+    capped?.setFontStyle('700');
+
+    modal.addContent(
+      body,
+      reward,
+      time,
+      ...(capped ? [capped] : []),
+      ...button.group.getChildren(),
+    );
   }
 
   private renderSettingsModal(): void {
@@ -886,6 +998,22 @@ export class FactoryScene extends Phaser.Scene {
     return [sectionPanel, titleLabel, ...rows];
   }
 
+  private applyOfflineEarningsOnLoad(loadResult: LoadSaveResult, nowMs: number): OfflineEarningsResult | undefined {
+    if (loadResult.status !== 'loaded') {
+      return undefined;
+    }
+
+    const earnings = calculateOfflineEarnings(loadResult.lastActiveAtMs, nowMs);
+    if (!earnings) {
+      return undefined;
+    }
+
+    this.state.currencies.coins = this.sanitizeCurrency(this.state.currencies.coins + earnings.coins);
+    this.state.lastUpdatedAtMs = nowMs;
+    saveGameState(this.state, nowMs);
+    return earnings;
+  }
+
   private handleResetSave(): void {
     if (!this.resetSaveArmed) {
       this.resetSaveArmed = true;
@@ -908,6 +1036,14 @@ export class FactoryScene extends Phaser.Scene {
 
   private saveProgress(): void {
     saveGameState(this.state);
+  }
+
+  private formatOfflineMinutes(seconds: number): number {
+    return Math.max(1, Math.ceil(this.sanitizeCurrency(seconds) / 60));
+  }
+
+  private sanitizeCurrency(value: number): number {
+    return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
   }
 
   private handleCraft(excuseId: ExcuseId): void {
