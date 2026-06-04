@@ -7,6 +7,7 @@ export const customers: CustomerDefinition[] = [
     problemText: 'ต้องเข้าประชุม แต่ยังไม่ถึงออฟฟิศ',
     wantedExcuseIds: ['traffic_jam'],
     coinMultiplier: 1,
+    patienceSeconds: 60,
     smoothnessReward: 1,
   },
   {
@@ -15,6 +16,7 @@ export const customers: CustomerDefinition[] = [
     problemText: 'การบ้านอยู่ที่ไหนสักแห่งในจักรวาล',
     wantedExcuseIds: ['just_saw_message'],
     coinMultiplier: 1,
+    patienceSeconds: 55,
     smoothnessReward: 1,
   },
   {
@@ -23,6 +25,7 @@ export const customers: CustomerDefinition[] = [
     problemText: 'ต้องตอบกลับโดยไม่ดูน่าสงสัยเกินไป',
     wantedExcuseIds: ['battery_dead', 'just_saw_message'],
     coinMultiplier: 1,
+    patienceSeconds: 50,
     smoothnessReward: 2,
   },
 ];

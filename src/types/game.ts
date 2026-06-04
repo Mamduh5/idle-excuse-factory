@@ -23,6 +23,7 @@ export type CustomerDefinition = {
   problemText: string;
   wantedExcuseIds: ExcuseId[];
   coinMultiplier: number;
+  patienceSeconds: number;
   smoothnessReward: number;
 };
 
@@ -32,7 +33,7 @@ export type CustomerInstance = {
   wantedExcuseIds: ExcuseId[];
   patienceRemainingMs: number;
   createdAtMs: number;
-  status: 'waiting' | 'served';
+  status: 'waiting' | 'served' | 'left';
   servedAtMs?: number;
   servedReward?: {
     coins: number;

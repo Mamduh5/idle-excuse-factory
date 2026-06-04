@@ -32,6 +32,10 @@ export type RefillResult = {
   batchNumber: number;
 };
 
+export type PatienceTickResult = {
+  expiredInstanceIds: string[];
+};
+
 const customerById = new Map(customers.map((customer) => [customer.id, customer]));
 
 export function craftExcuse(state: GameState, excuseId: ExcuseId): CraftResult {
@@ -60,6 +64,7 @@ export function craftExcuse(state: GameState, excuseId: ExcuseId): CraftResult {
 }
 
 export function serveCustomerByInstanceId(state: GameState, instanceId: string, nowMs = Date.now()): ServeResult {
+  expireCustomerPatience(state, nowMs);
   const match = state.activeCustomers.find((customer) => customer.instanceId === instanceId);
   if (!match || match.status !== 'waiting') {
     return emptyServeResult();
@@ -119,15 +124,55 @@ export function refillCustomerBatch(state: GameState, nowMs = Date.now()): Refil
   };
 }
 
-function createCustomerBatch(batchNumber: number, nowMs: number): CustomerInstance[] {
+export function createCustomerBatch(batchNumber: number, nowMs: number): CustomerInstance[] {
   return customers.slice(0, 3).map((customer, index) => ({
     instanceId: `batch-${batchNumber}-${index}-${customer.id}`,
     customerId: customer.id,
     wantedExcuseIds: [...customer.wantedExcuseIds],
-    patienceRemainingMs: 0,
+    patienceRemainingMs: getCustomerPatienceMs(customer),
     createdAtMs: nowMs,
     status: 'waiting',
   }));
+}
+
+export function expireCustomerPatience(state: GameState, nowMs = Date.now()): PatienceTickResult {
+  const expiredInstanceIds: string[] = [];
+
+  state.activeCustomers.forEach((customer) => {
+    if (customer.status !== 'waiting') {
+      return;
+    }
+
+    const remainingMs = getCustomerPatienceRemainingMs(customer, nowMs);
+    customer.patienceRemainingMs = remainingMs;
+    customer.createdAtMs = nowMs;
+
+    if (remainingMs > 0) {
+      return;
+    }
+
+    customer.status = 'left';
+    expiredInstanceIds.push(customer.instanceId);
+  });
+
+  if (expiredInstanceIds.length > 0) {
+    state.lastUpdatedAtMs = nowMs;
+  }
+
+  return { expiredInstanceIds };
+}
+
+export function getCustomerPatienceRemainingMs(customer: CustomerInstance, nowMs = Date.now()): number {
+  if (customer.status !== 'waiting') {
+    return 0;
+  }
+
+  const elapsedMs = sanitizeCount(nowMs - sanitizeTimestamp(customer.createdAtMs, nowMs));
+  return Math.max(0, sanitizeCount(customer.patienceRemainingMs) - elapsedMs);
+}
+
+export function getCustomerPatienceMs(customer: CustomerDefinition): number {
+  return Math.max(1, sanitizeCount(customer.patienceSeconds)) * 1000;
 }
 
 function serveCustomer(
@@ -188,4 +233,8 @@ function sanitizeCurrencies(state: GameState): void {
 
 function sanitizeCount(value: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+function sanitizeTimestamp(value: number, fallback: number): number {
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
 }

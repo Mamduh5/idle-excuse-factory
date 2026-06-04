@@ -9,6 +9,8 @@ import { createInitialState } from '../state/initialState';
 import {
   canRefillCustomerBatch,
   craftExcuse,
+  expireCustomerPatience,
+  getCustomerPatienceRemainingMs,
   getWaitingCustomerByInstanceId,
   getWantedExcuseIds,
   hasMatchingStock,
@@ -48,6 +50,7 @@ export class FactoryScene extends Phaser.Scene {
   private stockFlashExcuseId?: ExcuseId;
   private stockFlashKind?: StockFlashKind;
   private offlineEarnings?: OfflineEarningsResult;
+  private lastPatienceRenderSecond = -1;
   private resetSaveArmed = false;
   private selectedCustomerInstanceId?: string;
 
@@ -79,6 +82,36 @@ export class FactoryScene extends Phaser.Scene {
     this.autosaveTimer?.remove();
     this.servedFeedbackTimer?.remove();
     this.stockFlashTimer?.remove();
+  }
+
+  public update(): void {
+    const nowMs = Date.now();
+    const currentSecond = Math.floor(nowMs / 1000);
+    if (currentSecond === this.lastPatienceRenderSecond) {
+      return;
+    }
+
+    this.lastPatienceRenderSecond = currentSecond;
+    const hasWaitingCustomers = this.state.activeCustomers.some((customer) => customer.status === 'waiting');
+    if (!hasWaitingCustomers) {
+      return;
+    }
+
+    const result = expireCustomerPatience(this.state, nowMs);
+    const selectedExpired = this.selectedCustomerInstanceId !== undefined
+      && result.expiredInstanceIds.includes(this.selectedCustomerInstanceId);
+    if (selectedExpired) {
+      this.selectedCustomerInstanceId = undefined;
+    }
+
+    if (result.expiredInstanceIds.length > 0) {
+      this.saveProgress();
+    }
+
+    this.renderFactory();
+    if (result.expiredInstanceIds.length > 0) {
+      this.showToast('ลูกค้ารอไม่ไหวแล้ว...');
+    }
   }
 
   private renderFactory(): void {
@@ -239,10 +272,11 @@ export class FactoryScene extends Phaser.Scene {
     const definition = this.customersById.get(customer.customerId);
     const recentlyServed = this.isRecentlyServed(customer, nowMs);
     const selected = this.selectedCustomerInstanceId === customer.instanceId && customer.status === 'waiting';
+    const left = customer.status === 'left';
     const bg = addPanel(
       this,
       rect,
-      recentlyServed ? colors.panelServed : customer.status === 'served' ? colors.panelEmpty : colors.panel,
+      recentlyServed ? colors.panelServed : left ? colors.panelNeeded : customer.status === 'served' ? colors.panelEmpty : colors.panel,
       10,
     );
     const selectedBorder = selected ? this.addSelectedBorder(rect) : undefined;
@@ -301,6 +335,22 @@ export class FactoryScene extends Phaser.Scene {
       return [bg, ...button.group.getChildren()];
     }
 
+    if (definition && left) {
+      const leftTitle = addLabel(this, 'ลูกค้ารอไม่ไหวแล้ว...', rect.x + 10, rect.y + (compact ? 7 : 8), compact ? 11 : 13, '#2b2018', rect.width - 20);
+      const leftText = addLabel(
+        this,
+        'เดินหนีไปแล้ว · ไม่มีค่าปรับ',
+        rect.x + 10,
+        rect.y + rect.height - (compact ? 17 : 20),
+        compact ? 9 : 11,
+        '#74594c',
+        rect.width - 20,
+      );
+      leftTitle.setFontStyle('800');
+      leftText.setFontStyle('700');
+      return [bg, leftTitle, leftText];
+    }
+
     if (!definition || customer.status === 'served') {
       const empty = addLabel(
         this,
@@ -317,6 +367,9 @@ export class FactoryScene extends Phaser.Scene {
 
     const title = definition.displayName;
     const wanted = this.formatWantedExcuseNames(customer.wantedExcuseIds);
+    const patienceRemainingMs = getCustomerPatienceRemainingMs(customer, nowMs);
+    const patienceSeconds = Math.ceil(patienceRemainingMs / 1000);
+    const lowPatience = patienceRemainingMs <= 10_000;
     const name = addLabel(this, title, rect.x + 10, rect.y + 6, compact ? 11 : 13, '#2b2018', rect.width * 0.58);
     const want = addLabel(
       this,
@@ -332,18 +385,28 @@ export class FactoryScene extends Phaser.Scene {
       this,
       selected ? `ต้องการ: ${wanted}` : this.getCustomerStatus(definition),
       rect.x + 10,
-      rect.y + rect.height - (compact ? 17 : 20),
+      rect.y + rect.height - (compact ? 27 : 32),
       compact ? 9 : 11,
       selected ? '#2b2018' : '#74594c',
       rect.width - 20,
     );
+    const patience = addLabel(
+      this,
+      `รอได้อีก ${patienceSeconds}s`,
+      rect.x + 10,
+      rect.y + rect.height - (compact ? 14 : 17),
+      compact ? 8 : 9,
+      lowPatience ? '#d97706' : '#2f7d32',
+      rect.width - 20,
+    );
     status.setFontStyle(selected ? '800' : '500');
+    patience.setFontStyle('900');
     const hitArea = this.add.zone(rect.x, rect.y, rect.width, rect.height)
       .setOrigin(0)
       .setInteractive({ useHandCursor: true });
     hitArea.on('pointerup', () => this.selectCustomer(customer.instanceId));
 
-    return [bg, ...(selectedBorder ? [selectedBorder] : []), name, want, status, hitArea];
+    return [bg, ...(selectedBorder ? [selectedBorder] : []), name, want, status, patience, hitArea];
   }
 
   private addSelectedBorder(rect: Rect): Phaser.GameObjects.Graphics {
@@ -380,7 +443,7 @@ export class FactoryScene extends Phaser.Scene {
 
   private isQueueCleared(nowMs: number): boolean {
     return this.state.activeCustomers.length > 0
-      && this.state.activeCustomers.every((customer) => customer.status === 'served')
+      && this.state.activeCustomers.every((customer) => customer.status !== 'waiting')
       && this.state.activeCustomers.every((customer) => !this.isRecentlyServed(customer, nowMs));
   }
 
@@ -1144,6 +1207,11 @@ export class FactoryScene extends Phaser.Scene {
   }
 
   private handleNextBatch(): void {
+    const patienceResult = expireCustomerPatience(this.state);
+    if (patienceResult.expiredInstanceIds.length > 0) {
+      this.saveProgress();
+    }
+
     if (!canRefillCustomerBatch(this.state)) {
       this.showToast('ยังมีลูกค้ารออยู่');
       return;
@@ -1168,8 +1236,22 @@ export class FactoryScene extends Phaser.Scene {
       return;
     }
 
+    const patienceResult = expireCustomerPatience(this.state);
+    if (patienceResult.expiredInstanceIds.length > 0) {
+      this.saveProgress();
+    }
+
+    if (patienceResult.expiredInstanceIds.includes(this.selectedCustomerInstanceId)) {
+      this.selectedCustomerInstanceId = undefined;
+      this.renderFactory();
+      this.showToast('ลูกค้ารอไม่ไหวแล้ว...');
+      return;
+    }
+
     const result = serveCustomerByInstanceId(this.state, this.selectedCustomerInstanceId);
     if (!result.served) {
+      this.clearInvalidSelection();
+      this.renderFactory();
       this.showToast('ยังไม่มีข้ออ้างที่ลูกค้าต้องการ');
       return;
     }
@@ -1189,6 +1271,12 @@ export class FactoryScene extends Phaser.Scene {
   }
 
   private selectCustomer(instanceId: string): void {
+    const patienceResult = expireCustomerPatience(this.state);
+    if (patienceResult.expiredInstanceIds.length > 0) {
+      this.saveProgress();
+      this.renderFactory();
+    }
+
     const customer = this.state.activeCustomers.find((candidate) => candidate.instanceId === instanceId);
     if (!customer || customer.status !== 'waiting') {
       return;

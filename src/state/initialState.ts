@@ -1,4 +1,6 @@
+import { customers } from '../data/customers';
 import { starterExcuseIds } from '../data/excuses';
+import { getCustomerPatienceMs } from '../systems/gameplay';
 import type { ExcuseStock, GameState } from '../types/game';
 
 const starterStock = starterExcuseIds.reduce<ExcuseStock>((stock, id) => {
@@ -7,6 +9,8 @@ const starterStock = starterExcuseIds.reduce<ExcuseStock>((stock, id) => {
 }, {} as ExcuseStock);
 
 export function createInitialState(nowMs = Date.now()): GameState {
+  const customerById = new Map(customers.map((customer) => [customer.id, customer]));
+
   return {
     currencies: {
       coins: 0,
@@ -19,7 +23,7 @@ export function createInitialState(nowMs = Date.now()): GameState {
         instanceId: 'starter-late-worker',
         customerId: 'late_worker',
         wantedExcuseIds: ['traffic_jam'],
-        patienceRemainingMs: 0,
+        patienceRemainingMs: getCustomerPatienceMs(customerById.get('late_worker') ?? customers[0]),
         createdAtMs: nowMs,
         status: 'waiting',
       },
@@ -27,7 +31,7 @@ export function createInitialState(nowMs = Date.now()): GameState {
         instanceId: 'starter-missing-student',
         customerId: 'missing_student',
         wantedExcuseIds: ['just_saw_message'],
-        patienceRemainingMs: 0,
+        patienceRemainingMs: getCustomerPatienceMs(customerById.get('missing_student') ?? customers[1]),
         createdAtMs: nowMs,
         status: 'waiting',
       },
@@ -35,7 +39,7 @@ export function createInitialState(nowMs = Date.now()): GameState {
         instanceId: 'starter-ghost-texter',
         customerId: 'ghost_texter',
         wantedExcuseIds: ['battery_dead', 'just_saw_message'],
-        patienceRemainingMs: 0,
+        patienceRemainingMs: getCustomerPatienceMs(customerById.get('ghost_texter') ?? customers[2]),
         createdAtMs: nowMs,
         status: 'waiting',
       },

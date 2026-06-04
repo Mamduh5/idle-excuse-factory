@@ -2,8 +2,12 @@ import { excuses } from '../src/data/excuses';
 import { createInitialState } from '../src/state/initialState';
 import { clearSavedGame, normalizeGameState, normalizeSavedGame, saveGameState } from '../src/services/saveService';
 import {
+  canRefillCustomerBatch,
   craftExcuse,
+  expireCustomerPatience,
   findFirstAvailableWantedExcuse,
+  getCustomerPatienceRemainingMs,
+  refillCustomerBatch,
   serveCustomerByInstanceId,
 } from '../src/systems/gameplay';
 import { calculateOfflineEarnings, offlineEarningsCapMs } from '../src/systems/offlineEarnings';
@@ -79,6 +83,31 @@ const tests: TestCase[] = [
     },
   },
   {
+    name: 'patience expiration marks waiting customer left',
+    run: () => {
+      const state = createInitialState(nowMs);
+      const result = expireCustomerPatience(state, nowMs + 61_000);
+      assertEqual(result.expiredInstanceIds.includes('starter-late-worker'), true, 'late worker expired');
+      assertEqual(state.activeCustomers[0].status, 'left', 'expired customer marked left');
+      assertEqual(state.currencies.coins, 0, 'no coin penalty');
+      assertEqual(state.currencies.smoothness, 0, 'no smoothness penalty');
+    },
+  },
+  {
+    name: 'expired customer cannot be served or grant rewards',
+    run: () => {
+      const state = createInitialState(nowMs);
+      state.excuseStock.traffic_jam = 1;
+      expireCustomerPatience(state, nowMs + 61_000);
+
+      const result = serveCustomerByInstanceId(state, 'starter-late-worker', nowMs + 61_500);
+      assertEqual(result.served, false, 'expired customer is not served');
+      assertEqual(state.excuseStock.traffic_jam, 1, 'expired customer consumes no stock');
+      assertEqual(state.currencies.coins, 0, 'expired customer grants no coins');
+      assertEqual(state.currencies.smoothness, 0, 'expired customer grants no smoothness');
+    },
+  },
+  {
     name: 'missing stock does not grant serving rewards',
     run: () => {
       const state = createInitialState(nowMs);
@@ -104,6 +133,25 @@ const tests: TestCase[] = [
       assertEqual(result.excuseId, 'battery_dead', 'battery excuse consumed first');
       assertEqual(state.excuseStock.battery_dead, 0, 'first matching stock consumed');
       assertEqual(state.excuseStock.just_saw_message, 1, 'later matching stock preserved');
+    },
+  },
+  {
+    name: 'refill is allowed when all customers are served or left',
+    run: () => {
+      const state = createInitialState(nowMs);
+      state.activeCustomers[0].status = 'served';
+      state.activeCustomers[1].status = 'left';
+      state.activeCustomers[2].status = 'served';
+
+      assertEqual(canRefillCustomerBatch(state), true, 'inactive customers allow refill');
+      const refill = refillCustomerBatch(state, nowMs + 100);
+      assertEqual(refill.refilled, true, 'refill succeeds');
+      assertEqual(state.activeCustomers.every((customer) => customer.status === 'waiting'), true, 'new batch is waiting');
+      assertEqual(
+        state.activeCustomers.every((customer) => getCustomerPatienceRemainingMs(customer, nowMs + 100) > 0),
+        true,
+        'new batch has fresh patience',
+      );
     },
   },
   {
@@ -244,6 +292,36 @@ const tests: TestCase[] = [
       assertEqual(normalized.activeCustomers.length, 3, 'invalid customer list falls back');
       assertEqual(normalized.customerBatchNumber, 0, 'negative batch sanitizes');
       assertEqual(normalized.lastUpdatedAtMs, nowMs, 'invalid timestamp falls back');
+    },
+  },
+  {
+    name: 'save normalization marks loaded expired waiting customers left',
+    run: () => {
+      const normalized = normalizeGameState(
+        {
+          currencies: { coins: 0, smoothness: 0 },
+          currentZoneId: 'daily_life',
+          excuseStock: {},
+          activeCustomers: [
+            {
+              instanceId: 'loaded-late-worker',
+              customerId: 'late_worker',
+              wantedExcuseIds: ['traffic_jam'],
+              patienceRemainingMs: 60_000,
+              createdAtMs: nowMs - 61_000,
+              status: 'waiting',
+            },
+          ],
+          customerBatchNumber: 0,
+          upgrades: {},
+          unlockedZoneIds: ['daily_life'],
+          lastUpdatedAtMs: nowMs - 61_000,
+        },
+        nowMs,
+      );
+
+      assertEqual(normalized.activeCustomers[0].status, 'left', 'loaded expired customer is left');
+      assertEqual(normalized.activeCustomers[0].patienceRemainingMs, 0, 'expired patience is zero');
     },
   },
   {

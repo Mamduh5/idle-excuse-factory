@@ -3,6 +3,7 @@ import { starterExcuseIds } from '../data/excuses';
 import { upgrades } from '../data/upgrades';
 import { zones } from '../data/zones';
 import { createInitialState } from '../state/initialState';
+import { getCustomerPatienceMs } from '../systems/gameplay';
 import { getExcuseStockCapForLevel, stockCapUpgradeId } from '../systems/upgrades';
 import type {
   CustomerInstance,
@@ -172,7 +173,12 @@ function normalizeCustomer(value: unknown, index: number, nowMs: number): Custom
   const wantedExcuseIds = Array.isArray(value.wantedExcuseIds)
     ? value.wantedExcuseIds.filter((id): id is ExcuseId => typeof id === 'string' && knownExcuseIds.has(id as ExcuseId))
     : [];
-  const status = value.status === 'served' ? 'served' : 'waiting';
+  const loadedStatus = value.status === 'served' ? 'served' : value.status === 'left' ? 'left' : 'waiting';
+  const loadedCreatedAtMs = sanitizeTimestamp(value.createdAtMs, nowMs);
+  const loadedPatienceMs = sanitizePositiveCount(value.patienceRemainingMs, getCustomerPatienceMs(definition));
+  const elapsedMs = Math.max(0, nowMs - loadedCreatedAtMs);
+  const remainingMs = loadedStatus === 'waiting' ? Math.max(0, loadedPatienceMs - elapsedMs) : 0;
+  const status = loadedStatus === 'waiting' && remainingMs <= 0 ? 'left' : loadedStatus;
   const servedReward = status === 'served' ? normalizeServedReward(value.servedReward) : undefined;
 
   return {
@@ -181,8 +187,8 @@ function normalizeCustomer(value: unknown, index: number, nowMs: number): Custom
       : `loaded-${index}-${definition.id}`,
     customerId: definition.id,
     wantedExcuseIds: wantedExcuseIds.length > 0 ? wantedExcuseIds : [...definition.wantedExcuseIds],
-    patienceRemainingMs: sanitizeCount(value.patienceRemainingMs),
-    createdAtMs: sanitizeTimestamp(value.createdAtMs, nowMs),
+    patienceRemainingMs: status === 'waiting' ? remainingMs : 0,
+    createdAtMs: status === 'waiting' ? nowMs : loadedCreatedAtMs,
     status,
     servedAtMs: status === 'served' ? sanitizeTimestamp(value.servedAtMs, nowMs) : undefined,
     servedReward,
@@ -226,6 +232,10 @@ function normalizeUnlockedZoneIds(value: unknown): string[] {
 
 function sanitizeCount(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+function sanitizePositiveCount(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
 }
 
 function sanitizeTimestamp(value: unknown, fallback: number): number {
