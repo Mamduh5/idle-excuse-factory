@@ -88,7 +88,7 @@ export function clearSavedGame(): boolean {
   }
 }
 
-function normalizeSavedGame(rawSave: unknown, nowMs: number): GameState {
+export function normalizeSavedGame(rawSave: unknown, nowMs: number): GameState {
   if (!isRecord(rawSave) || rawSave.version !== 1 || !isRecord(rawSave.state)) {
     return createInitialState(nowMs);
   }
@@ -96,7 +96,7 @@ function normalizeSavedGame(rawSave: unknown, nowMs: number): GameState {
   return normalizeGameState(rawSave.state, nowMs, sanitizeTimestamp(rawSave.lastActiveAtMs, sanitizeTimestamp(rawSave.savedAtMs, nowMs)));
 }
 
-function normalizeGameState(rawState: unknown, nowMs: number, fallbackUpdatedAtMs = nowMs): GameState {
+export function normalizeGameState(rawState: unknown, nowMs: number, fallbackUpdatedAtMs = nowMs): GameState {
   const initial = createInitialState(nowMs);
   if (!isRecord(rawState)) {
     return initial;
