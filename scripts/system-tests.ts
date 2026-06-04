@@ -325,6 +325,108 @@ const tests: TestCase[] = [
     },
   },
   {
+    name: 'save normalization pads one cleared loaded customer to a refillable three-slot queue',
+    run: () => {
+      const normalized = normalizeGameState(
+        createRawStateWithCustomers([
+          {
+            instanceId: 'loaded-late-worker',
+            customerId: 'late_worker',
+            wantedExcuseIds: ['traffic_jam'],
+            patienceRemainingMs: 0,
+            createdAtMs: nowMs - 1_000,
+            status: 'served',
+            servedAtMs: nowMs - 500,
+            servedReward: {
+              coins: 10,
+              smoothness: 1,
+              consumedExcuseId: 'traffic_jam',
+            },
+          },
+        ]),
+        nowMs,
+      );
+
+      assertEqual(normalized.activeCustomers.length, 3, 'partial one-customer queue pads to three slots');
+      assertEqual(normalized.activeCustomers[2].status !== 'waiting', true, 'third slot can render refill action');
+      assertEqual(canRefillCustomerBatch(normalized), true, 'one cleared loaded customer allows refill');
+
+      const refill = refillCustomerBatch(normalized, nowMs + 100);
+      assertEqual(refill.refilled, true, 'refill succeeds from padded one-customer queue');
+      assertEqual(normalized.activeCustomers.length, 3, 'refill creates three customers');
+      assertEqual(
+        normalized.activeCustomers.every((customer) => customer.status === 'waiting'),
+        true,
+        'refill creates fresh waiting customers',
+      );
+    },
+  },
+  {
+    name: 'save normalization pads two cleared loaded customers to a refillable three-slot queue',
+    run: () => {
+      const normalized = normalizeGameState(
+        createRawStateWithCustomers([
+          {
+            instanceId: 'loaded-late-worker',
+            customerId: 'late_worker',
+            wantedExcuseIds: ['traffic_jam'],
+            patienceRemainingMs: 0,
+            createdAtMs: nowMs - 2_000,
+            status: 'served',
+          },
+          {
+            instanceId: 'loaded-missing-student',
+            customerId: 'missing_student',
+            wantedExcuseIds: ['just_saw_message'],
+            patienceRemainingMs: 0,
+            createdAtMs: nowMs - 1_000,
+            status: 'left',
+          },
+        ]),
+        nowMs,
+      );
+
+      assertEqual(normalized.activeCustomers.length, 3, 'partial two-customer queue pads to three slots');
+      assertEqual(normalized.activeCustomers[2].status !== 'waiting', true, 'third slot can render refill action');
+      assertEqual(canRefillCustomerBatch(normalized), true, 'two cleared loaded customers allow refill');
+
+      const refill = refillCustomerBatch(normalized, nowMs + 100);
+      assertEqual(refill.refilled, true, 'refill succeeds from padded two-customer queue');
+      assertEqual(normalized.activeCustomers.length, 3, 'refill creates three customers');
+      assertEqual(
+        normalized.activeCustomers.every((customer) => customer.status === 'waiting'),
+        true,
+        'refill creates fresh waiting customers',
+      );
+    },
+  },
+  {
+    name: 'save normalization keeps partial loaded queue unrefillable while any customer waits',
+    run: () => {
+      const normalized = normalizeGameState(
+        createRawStateWithCustomers([
+          {
+            instanceId: 'loaded-late-worker',
+            customerId: 'late_worker',
+            wantedExcuseIds: ['traffic_jam'],
+            patienceRemainingMs: 60_000,
+            createdAtMs: nowMs,
+            status: 'waiting',
+          },
+        ]),
+        nowMs,
+      );
+
+      assertEqual(normalized.activeCustomers.length, 3, 'partial waiting queue pads to three slots');
+      assertEqual(normalized.activeCustomers[0].status, 'waiting', 'loaded waiting customer persists');
+      assertEqual(canRefillCustomerBatch(normalized), false, 'waiting loaded customer blocks refill');
+
+      const refill = refillCustomerBatch(normalized, nowMs + 100);
+      assertEqual(refill.refilled, false, 'refill is blocked while a loaded customer waits');
+      assertEqual(normalized.activeCustomers[0].status, 'waiting', 'blocked refill preserves waiting customer');
+    },
+  },
+  {
     name: 'save service is safe without browser localStorage',
     run: () => {
       const originalLocalStorage = globalThis.localStorage;
@@ -358,6 +460,19 @@ function requireUpgrade(upgradeId: string) {
   const upgrade = getUpgradeById(upgradeId);
   assert(upgrade !== undefined, `${upgradeId} upgrade exists`);
   return upgrade;
+}
+
+function createRawStateWithCustomers(activeCustomers: unknown[]) {
+  return {
+    currencies: { coins: 0, smoothness: 0 },
+    currentZoneId: 'daily_life',
+    excuseStock: {},
+    activeCustomers,
+    customerBatchNumber: 0,
+    upgrades: {},
+    unlockedZoneIds: ['daily_life'],
+    lastUpdatedAtMs: nowMs,
+  };
 }
 
 function assert(condition: unknown, message: string): asserts condition {

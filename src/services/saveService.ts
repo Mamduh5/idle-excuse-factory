@@ -157,7 +157,40 @@ function normalizeCustomers(value: unknown, nowMs: number, fallback: CustomerIns
     .filter((customer): customer is CustomerInstance => customer !== undefined)
     .slice(0, 3);
 
-  return normalized.length > 0 ? normalized : fallback;
+  if (normalized.length === 0) {
+    return fallback;
+  }
+
+  return fillCustomerSlots(normalized, fallback, nowMs);
+}
+
+function fillCustomerSlots(normalized: CustomerInstance[], fallback: CustomerInstance[], nowMs: number): CustomerInstance[] {
+  const filled = [...normalized];
+
+  while (filled.length < 3) {
+    const fallbackCustomer = fallback.find((customer) => {
+      return !filled.some((filledCustomer) => filledCustomer.customerId === customer.customerId);
+    }) ?? fallback[filled.length] ?? fallback[0];
+
+    if (!fallbackCustomer) {
+      break;
+    }
+
+    filled.push(createInactiveCustomerSlot(fallbackCustomer, filled.length, nowMs));
+  }
+
+  return filled;
+}
+
+function createInactiveCustomerSlot(source: CustomerInstance, index: number, nowMs: number): CustomerInstance {
+  return {
+    instanceId: `loaded-empty-${index}-${source.customerId}`,
+    customerId: source.customerId,
+    wantedExcuseIds: [...source.wantedExcuseIds],
+    patienceRemainingMs: 0,
+    createdAtMs: nowMs,
+    status: 'left',
+  };
 }
 
 function normalizeCustomer(value: unknown, index: number, nowMs: number): CustomerInstance | undefined {
