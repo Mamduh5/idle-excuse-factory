@@ -1,4 +1,5 @@
 import { excuses } from '../src/data/excuses';
+import { createDevSaveSeed, devSaveSeedDefinitions } from '../src/services/devSaveSeeds';
 import { createInitialState } from '../src/state/initialState';
 import { clearSavedGame, normalizeGameState, normalizeSavedGame, saveGameState } from '../src/services/saveService';
 import {
@@ -424,6 +425,47 @@ const tests: TestCase[] = [
       const refill = refillCustomerBatch(normalized, nowMs + 100);
       assertEqual(refill.refilled, false, 'refill is blocked while a loaded customer waits');
       assertEqual(normalized.activeCustomers[0].status, 'waiting', 'blocked refill preserves waiting customer');
+    },
+  },
+  {
+    name: 'dev save seeds create raw partial queues that normalize for browser QA',
+    run: () => {
+      assertEqual(devSaveSeedDefinitions.length, 5, 'all dev QA seeds are listed');
+
+      const oneInactive = createDevSaveSeed('partial_one_inactive', nowMs);
+      assertEqual(oneInactive.state.activeCustomers.length, 1, 'one inactive seed writes a raw partial queue');
+      assertEqual(oneInactive.state.activeCustomers[0].status, 'served', 'one inactive seed is cleared');
+      const oneInactiveLoaded = normalizeSavedGame(oneInactive, nowMs);
+      assertEqual(oneInactiveLoaded.activeCustomers.length, 3, 'one inactive seed loads into three slots');
+      assertEqual(canRefillCustomerBatch(oneInactiveLoaded), true, 'one inactive seed loads refillable');
+
+      const twoInactive = createDevSaveSeed('partial_two_inactive', nowMs);
+      assertEqual(twoInactive.state.activeCustomers.length, 2, 'two inactive seed writes a raw partial queue');
+      const twoInactiveLoaded = normalizeSavedGame(twoInactive, nowMs);
+      assertEqual(twoInactiveLoaded.activeCustomers.length, 3, 'two inactive seed loads into three slots');
+      assertEqual(canRefillCustomerBatch(twoInactiveLoaded), true, 'two inactive seed loads refillable');
+
+      const oneWaiting = createDevSaveSeed('partial_one_waiting', nowMs);
+      assertEqual(oneWaiting.state.activeCustomers.length, 1, 'one waiting seed writes a raw partial queue');
+      assertEqual(oneWaiting.state.activeCustomers[0].status, 'waiting', 'one waiting seed keeps a waiting customer');
+      const oneWaitingLoaded = normalizeSavedGame(oneWaiting, nowMs);
+      assertEqual(oneWaitingLoaded.activeCustomers.length, 3, 'one waiting seed loads into three slots');
+      assertEqual(canRefillCustomerBatch(oneWaitingLoaded), false, 'one waiting seed still blocks refill');
+    },
+  },
+  {
+    name: 'dev progress seed includes coins, stock, served customer, and upgrade',
+    run: () => {
+      const progress = createDevSaveSeed('progress', nowMs);
+
+      assertEqual(progress.state.currencies.coins, 125, 'progress seed coins');
+      assertEqual(progress.state.currencies.smoothness, 4, 'progress seed smoothness');
+      assertEqual(progress.state.excuseStock.traffic_jam, 2, 'progress seed traffic stock');
+      assertEqual(progress.state.excuseStock.battery_dead, 1, 'progress seed battery stock');
+      assertEqual(progress.state.excuseStock.just_saw_message, 3, 'progress seed message stock');
+      assertEqual(progress.state.upgrades.bigger_shelf, 1, 'progress seed bought shelf upgrade');
+      assertEqual(progress.state.activeCustomers[0].status, 'served', 'progress seed has a served customer');
+      assertEqual(progress.state.activeCustomers[0].servedReward?.consumedExcuseId, 'traffic_jam', 'progress seed records consumed excuse');
     },
   },
   {

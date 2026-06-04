@@ -4,6 +4,7 @@ import { excuses, starterExcuseIds } from '../data/excuses';
 import { upgrades } from '../data/upgrades';
 import { zones } from '../data/zones';
 import { colors } from '../rendering/colors';
+import { devSaveSeedDefinitions, writeDevSaveSeed, type DevSaveSeedDefinition } from '../services/devSaveSeeds';
 import { clearSavedGame, loadGameState, saveGameState, type LoadSaveResult } from '../services';
 import { createInitialState } from '../state/initialState';
 import {
@@ -33,6 +34,8 @@ import { inset, type Rect } from '../utils/layout';
 const servedFeedbackDurationMs = 1500;
 const stockFlashDurationMs = 600;
 const autosaveIntervalMs = 12000;
+type ViteImportMeta = ImportMeta & { env: { DEV: boolean } };
+const devQaEnabled = (import.meta as ViteImportMeta).env.DEV;
 type StockFlashKind = 'craft' | 'consume';
 type ActiveModal = 'settings' | 'upgrades' | 'zones' | 'archive' | 'offlineEarnings';
 
@@ -751,6 +754,7 @@ export class FactoryScene extends Phaser.Scene {
   private renderSettingsModal(): void {
     const height = this.scale.height;
     const compact = height < 720;
+    const showDevQa = devQaEnabled;
     const modal = createModalPanel(this, {
       depth: modalDepth,
       onClose: () => this.closeModal(),
@@ -760,20 +764,20 @@ export class FactoryScene extends Phaser.Scene {
     this.modalPanel = modal;
 
     const rows = ['Sound: On', 'Music: On', 'Save: Auto'];
-    const rowGap = compact ? 8 : 10;
-    const rowHeight = compact ? 38 : 44;
+    const rowGap = showDevQa ? compact ? 5 : 6 : compact ? 8 : 10;
+    const rowHeight = showDevQa ? compact ? 28 : 32 : compact ? 38 : 44;
     const rowX = modal.contentRect.x;
     const rowWidth = modal.contentRect.width;
     const rowStartY = modal.contentRect.y;
     const rowObjects = rows.flatMap((row, index) => {
       const y = rowStartY + index * (rowHeight + rowGap);
       const rowPanel = addPanel(this, { x: rowX, y, width: rowWidth, height: rowHeight }, colors.panelAlt, 12);
-      const rowLabel = addLabel(this, row, rowX + 14, y + rowHeight / 2 - 8, compact ? 12 : 14, '#2b2018', rowWidth - 28);
+      const rowLabel = addLabel(this, row, rowX + 14, y + rowHeight / 2 - (showDevQa ? 6 : 8), showDevQa ? compact ? 9 : 11 : compact ? 12 : 14, '#2b2018', rowWidth - 28);
       rowLabel.setFontStyle('700');
       return [rowPanel, rowLabel];
     });
     const resetY = rowStartY + rows.length * (rowHeight + rowGap);
-    const resetHeight = compact ? 54 : 60;
+    const resetHeight = showDevQa ? compact ? 40 : 44 : compact ? 54 : 60;
     const resetPanel = addPanel(
       this,
       { x: rowX, y: resetY, width: rowWidth, height: resetHeight },
@@ -784,8 +788,8 @@ export class FactoryScene extends Phaser.Scene {
       this,
       this.resetSaveArmed ? 'กดอีกครั้งเพื่อยืนยัน' : 'Reset Save',
       rowX + 14,
-      resetY + (compact ? 9 : 10),
-      compact ? 12 : 14,
+      resetY + (showDevQa ? compact ? 6 : 7 : compact ? 9 : 10),
+      showDevQa ? compact ? 10 : 11 : compact ? 12 : 14,
       '#2b2018',
       rowWidth - 28,
     );
@@ -793,8 +797,8 @@ export class FactoryScene extends Phaser.Scene {
       this,
       'ล้างเซฟแล้วเริ่มใหม่',
       rowX + 14,
-      resetY + (compact ? 31 : 35),
-      compact ? 9 : 10,
+      resetY + (showDevQa ? compact ? 23 : 25 : compact ? 31 : 35),
+      showDevQa ? compact ? 7 : 8 : compact ? 9 : 10,
       '#74594c',
       rowWidth - 28,
     );
@@ -805,18 +809,63 @@ export class FactoryScene extends Phaser.Scene {
     resetTitle.setFontStyle('800');
     resetHelp.setFontStyle('700');
 
+    const devObjects = showDevQa
+      ? this.renderDevQaSeedControls(
+        {
+          x: rowX,
+          y: resetY + resetHeight + rowGap,
+          width: rowWidth,
+          height: modal.panelRect.y + modal.panelRect.height - (resetY + resetHeight + rowGap) - (compact ? 20 : 24),
+        },
+        compact,
+      )
+      : [];
     const note = addLabel(
       this,
-      'Placeholder only',
+      showDevQa ? 'Dev only: writes save and reloads scene' : 'Placeholder only',
       rowX,
       modal.panelRect.y + modal.panelRect.height - (compact ? 34 : 40),
-      compact ? 10 : 11,
+      showDevQa ? compact ? 7 : 8 : compact ? 10 : 11,
       '#74594c',
       rowWidth,
     );
     note.setFontStyle('700');
 
-    modal.addContent(...rowObjects, resetPanel, resetTitle, resetHelp, resetHitArea, note);
+    modal.addContent(...rowObjects, resetPanel, resetTitle, resetHelp, resetHitArea, ...devObjects, note);
+  }
+
+  private renderDevQaSeedControls(rect: Rect, compact: boolean): Phaser.GameObjects.GameObject[] {
+    const title = addLabel(this, 'Dev QA Seeds', rect.x, rect.y, compact ? 9 : 10, '#2b2018', rect.width);
+    title.setFontStyle('900');
+
+    const gap = compact ? 4 : 5;
+    const buttonTop = rect.y + (compact ? 15 : 17);
+    const buttonHeight = compact ? 22 : 24;
+    const columns = 2;
+    const buttonWidth = (rect.width - gap) / columns;
+    const buttons = devSaveSeedDefinitions.flatMap((seed, index) => {
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const button = addButton(
+        this,
+        {
+          x: rect.x + column * (buttonWidth + gap),
+          y: buttonTop + row * (buttonHeight + gap),
+          width: buttonWidth,
+          height: buttonHeight,
+        },
+        seed.label,
+        () => this.handleDevSaveSeed(seed),
+        {
+          fontSize: compact ? 7 : 8,
+          fillColor: colors.panelNeeded,
+          pressedColor: colors.accent,
+        },
+      );
+      return button.group.getChildren();
+    });
+
+    return [title, ...buttons];
   }
 
   private renderUpgradesModal(): void {
@@ -1153,6 +1202,32 @@ export class FactoryScene extends Phaser.Scene {
     this.resetSaveArmed = false;
     this.renderFactory();
     this.showToast('ล้างเซฟแล้วเริ่มใหม่');
+  }
+
+  private handleDevSaveSeed(seed: DevSaveSeedDefinition): void {
+    if (!devQaEnabled) {
+      return;
+    }
+
+    const nowMs = Date.now();
+    if (!writeDevSaveSeed(seed.id, nowMs)) {
+      this.showToast('Dev seed failed: localStorage unavailable');
+      return;
+    }
+
+    const loadResult = loadGameState(nowMs);
+    this.state = loadResult.state;
+    this.selectedCustomerInstanceId = undefined;
+    this.stockFlashTimer?.remove();
+    this.stockFlashExcuseId = undefined;
+    this.stockFlashKind = undefined;
+    this.servedFeedbackTimer?.remove();
+    this.resetSaveArmed = false;
+    this.offlineEarnings = undefined;
+    this.activeModal = undefined;
+    this.lastPatienceRenderSecond = -1;
+    this.renderFactory();
+    this.showToast(`Dev seed: ${seed.label}`);
   }
 
   private saveProgress(): void {
