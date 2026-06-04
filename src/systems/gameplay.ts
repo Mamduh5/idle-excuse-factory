@@ -6,6 +6,11 @@ import type {
   ExcuseId,
   GameState,
 } from '../types/game';
+import {
+  calculateServeCoins,
+  calculateServeSmoothness,
+  getExcuseStockCap,
+} from './upgrades';
 
 export type CraftResult = {
   crafted: boolean;
@@ -30,9 +35,8 @@ export type RefillResult = {
 const customerById = new Map(customers.map((customer) => [customer.id, customer]));
 
 export function craftExcuse(state: GameState, excuseId: ExcuseId): CraftResult {
-  const definition = excuses[excuseId];
   const currentStock = sanitizeCount(state.excuseStock[excuseId]);
-  const cap = sanitizeCount(definition.maxStock);
+  const cap = getExcuseStockCap(state, excuseId);
 
   if (currentStock >= cap) {
     state.excuseStock[excuseId] = cap;
@@ -144,8 +148,9 @@ function serveCustomer(
     return emptyServeResult();
   }
 
-  const coinsGained = sanitizeCount(Math.floor(excuse.baseValue * customer.coinMultiplier));
-  const smoothnessGained = sanitizeCount(customer.smoothnessReward);
+  const baseCoins = sanitizeCount(Math.floor(excuse.baseValue * customer.coinMultiplier));
+  const coinsGained = calculateServeCoins(state, baseCoins);
+  const smoothnessGained = calculateServeSmoothness(state, customer.smoothnessReward);
 
   state.excuseStock[excuseId] = Math.max(0, stock - 1);
   state.currencies.coins = sanitizeCount(state.currencies.coins + coinsGained);

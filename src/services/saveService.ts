@@ -1,8 +1,9 @@
 import { customers } from '../data/customers';
-import { excuses, starterExcuseIds } from '../data/excuses';
+import { starterExcuseIds } from '../data/excuses';
 import { upgrades } from '../data/upgrades';
 import { zones } from '../data/zones';
 import { createInitialState } from '../state/initialState';
+import { getExcuseStockCapForLevel, stockCapUpgradeId } from '../systems/upgrades';
 import type {
   CustomerInstance,
   ExcuseId,
@@ -110,13 +111,15 @@ function normalizeGameState(rawState: unknown, nowMs: number, fallbackUpdatedAtM
     unlockedZoneIds.push(currentZoneId);
   }
 
+  const normalizedUpgrades = normalizeUpgrades(rawState.upgrades);
+
   return {
     currencies: normalizeCurrencies(rawState.currencies),
     currentZoneId,
-    excuseStock: normalizeExcuseStock(rawState.excuseStock),
+    excuseStock: normalizeExcuseStock(rawState.excuseStock, normalizedUpgrades),
     activeCustomers: normalizeCustomers(rawState.activeCustomers, nowMs, initial.activeCustomers),
     customerBatchNumber: sanitizeCount(rawState.customerBatchNumber),
-    upgrades: normalizeUpgrades(rawState.upgrades),
+    upgrades: normalizedUpgrades,
     unlockedZoneIds,
     lastUpdatedAtMs: sanitizeTimestamp(rawState.lastUpdatedAtMs, fallbackUpdatedAtMs),
   };
@@ -133,11 +136,12 @@ function normalizeCurrencies(value: unknown): GameState['currencies'] {
   };
 }
 
-function normalizeExcuseStock(value: unknown): ExcuseStock {
+function normalizeExcuseStock(value: unknown, normalizedUpgrades: UpgradeState): ExcuseStock {
   const stock = {} as ExcuseStock;
+  const shelfLevel = sanitizeCount(normalizedUpgrades[stockCapUpgradeId]);
   starterExcuseIds.forEach((id) => {
     const rawCount = isRecord(value) ? value[id] : undefined;
-    stock[id] = Math.min(excuses[id].maxStock, sanitizeCount(rawCount));
+    stock[id] = Math.min(getExcuseStockCapForLevel(id, shelfLevel), sanitizeCount(rawCount));
   });
   return stock;
 }

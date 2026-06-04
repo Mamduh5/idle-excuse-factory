@@ -46,6 +46,9 @@ export type UpgradeDefinition = {
   displayName: string;
   description: string;
   costCoins: number;
+  costGrowth?: number;
+  effectLabel?: string;
+  implemented: boolean;
   maxLevel: number;
 };
 

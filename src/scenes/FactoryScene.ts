@@ -16,7 +16,13 @@ import {
   serveCustomerByInstanceId,
 } from '../systems/gameplay';
 import { calculateOfflineEarnings, type OfflineEarningsResult } from '../systems/offlineEarnings';
-import type { CustomerDefinition, CustomerInstance, ExcuseId, GameState } from '../types/game';
+import {
+  calculateUpgradeCost,
+  getExcuseStockCap,
+  getUpgradeLevel,
+  purchaseUpgrade,
+} from '../systems/upgrades';
+import type { CustomerDefinition, CustomerInstance, ExcuseId, GameState, UpgradeDefinition } from '../types/game';
 import { createFactoryLayout, type FactoryLayout } from '../ui/FactoryLayout';
 import { createModalPanel, modalDepth, type ModalPanelHandle } from '../ui/ModalPanel';
 import { addButton, addLabel, addPanel } from '../ui/phaserUi';
@@ -386,13 +392,12 @@ export class FactoryScene extends Phaser.Scene {
     const cardTop = inner.y + (layout.compact ? 22 : 29);
     const cardHeight = Math.max(30, Math.floor((inner.height - (cardTop - inner.y) - cardGap * 2) / 3));
     const cards = starterExcuseIds.flatMap((id, index) => {
-      const excuse = excuses[id];
       const y = cardTop + index * (cardHeight + cardGap);
       return this.renderExcuseCard(
         { x: inner.x, y, width: inner.width, height: cardHeight },
         id,
         this.state.excuseStock[id],
-        excuse.maxStock,
+        getExcuseStockCap(this.state, id),
         layout.compact,
       );
     });
@@ -762,47 +767,63 @@ export class FactoryScene extends Phaser.Scene {
     });
     this.modalPanel = modal;
 
-    const visibleUpgrades = upgrades.slice(0, 3);
-    const rowGap = compact ? 7 : 9;
-    const rowHeight = compact ? 62 : 70;
+    const visibleUpgrades = upgrades;
+    const rowGap = compact ? 5 : 7;
+    const rowHeight = compact ? 50 : 57;
     const rowX = modal.contentRect.x;
     const rowWidth = modal.contentRect.width;
     const rowStartY = modal.contentRect.y;
-    const buttonWidth = compact ? 62 : 76;
-    const contentWidth = rowWidth - buttonWidth - 28;
+    const buttonWidth = compact ? 64 : 74;
+    const contentWidth = rowWidth - buttonWidth - 24;
     const rowObjects = visibleUpgrades.flatMap((upgrade, index) => {
       const y = rowStartY + index * (rowHeight + rowGap);
+      const level = getUpgradeLevel(this.state, upgrade.id);
+      const maxed = level >= upgrade.maxLevel;
+      const costValue = calculateUpgradeCost(upgrade, level);
+      const affordable = this.state.currencies.coins >= costValue;
       const rowPanel = addPanel(this, { x: rowX, y, width: rowWidth, height: rowHeight }, colors.panelAlt, 12);
-      const name = addLabel(this, upgrade.displayName, rowX + 12, y + 8, compact ? 11 : 13, '#2b2018', contentWidth);
-      const description = addLabel(this, upgrade.description, rowX + 12, y + (compact ? 26 : 30), compact ? 8 : 10, '#74594c', contentWidth);
-      const cost = addLabel(this, `Lv 0 · Cost ${upgrade.costCoins} coins`, rowX + 12, y + rowHeight - (compact ? 17 : 19), compact ? 8 : 10, '#2b2018', contentWidth);
-      const soonRect = {
-        x: rowX + rowWidth - buttonWidth - 10,
-        y: y + rowHeight / 2 - (compact ? 14 : 16),
-        width: buttonWidth,
-        height: compact ? 28 : 32,
-      };
-      const soonButton = addPanel(this, soonRect, colors.panelEmpty, 10);
-      const soon = addLabel(
+      const name = addLabel(this, upgrade.displayName, rowX + 10, y + (compact ? 5 : 6), compact ? 10 : 12, '#2b2018', contentWidth);
+      const description = addLabel(
         this,
-        compact ? 'Soon' : 'ยังไม่เปิด',
-        soonRect.x + soonRect.width / 2,
-        soonRect.y + soonRect.height / 2 - (compact ? 6 : 7),
-        compact ? 9 : 10,
+        `${upgrade.description} · ${upgrade.effectLabel ?? ''}`,
+        rowX + 10,
+        y + (compact ? 20 : 24),
+        compact ? 7 : 8,
         '#74594c',
-        soonRect.width,
+        contentWidth,
+      );
+      const cost = addLabel(
+        this,
+        upgrade.implemented
+          ? maxed ? `Lv ${level}/${upgrade.maxLevel} · Max` : `Lv ${level}/${upgrade.maxLevel} · Cost ${costValue} coins`
+          : 'Soon · waits for timers',
+        rowX + 10,
+        y + rowHeight - (compact ? 14 : 16),
+        compact ? 7 : 8,
+        '#2b2018',
+        contentWidth,
+      );
+      const action = this.renderUpgradeAction(
+        upgrade,
+        {
+          x: rowX + rowWidth - buttonWidth - 10,
+          y: y + rowHeight / 2 - (compact ? 13 : 15),
+          width: buttonWidth,
+          height: compact ? 26 : 30,
+        },
+        compact,
+        affordable,
+        maxed,
       );
       name.setFontStyle('800');
       description.setFontStyle('600');
       cost.setFontStyle('800');
-      soon.setOrigin(0.5, 0);
-      soon.setFontStyle('800');
-      return [rowPanel, name, description, cost, soonButton, soon];
+      return [rowPanel, name, description, cost, ...action];
     });
 
     const note = addLabel(
       this,
-      'Upgrade purchases are not added yet',
+      'Offline earnings stay on the MVP flat formula',
       rowX,
       modal.panelRect.y + modal.panelRect.height - (compact ? 34 : 40),
       compact ? 9 : 11,
@@ -812,6 +833,43 @@ export class FactoryScene extends Phaser.Scene {
     note.setFontStyle('700');
 
     modal.addContent(...rowObjects, note);
+  }
+
+  private renderUpgradeAction(
+    upgrade: UpgradeDefinition,
+    rect: Rect,
+    compact: boolean,
+    affordable: boolean,
+    maxed: boolean,
+  ): Phaser.GameObjects.GameObject[] {
+    if (!upgrade.implemented || maxed) {
+      const panel = addPanel(this, rect, colors.panelEmpty, 10);
+      const label = addLabel(
+        this,
+        maxed ? 'Max' : 'Soon',
+        rect.x + rect.width / 2,
+        rect.y + rect.height / 2 - (compact ? 6 : 7),
+        compact ? 9 : 10,
+        '#74594c',
+        rect.width,
+      );
+      label.setOrigin(0.5, 0);
+      label.setFontStyle('800');
+      return [panel, label];
+    }
+
+    const button = addButton(
+      this,
+      rect,
+      affordable ? 'Buy' : 'No coins',
+      () => this.handleBuyUpgrade(upgrade.id),
+      {
+        fontSize: compact ? 8 : 9,
+        fillColor: affordable ? colors.accent : colors.panelNeeded,
+        pressedColor: affordable ? colors.accentPressed : colors.panelEmpty,
+      },
+    );
+    return button.group.getChildren();
   }
 
   private renderZonesModal(): void {
@@ -1036,6 +1094,29 @@ export class FactoryScene extends Phaser.Scene {
 
   private saveProgress(): void {
     saveGameState(this.state);
+  }
+
+  private handleBuyUpgrade(upgradeId: string): void {
+    const result = purchaseUpgrade(this.state, upgradeId);
+
+    if (!result.purchased) {
+      if (result.reason === 'not_enough_coins') {
+        this.showToast('coins ไม่พอ');
+        return;
+      }
+
+      if (result.reason === 'max_level') {
+        this.showToast('อัปเกรดเต็มแล้ว');
+        return;
+      }
+
+      this.showToast('อัปเกรดนี้ยังไม่เปิด');
+      return;
+    }
+
+    this.saveProgress();
+    this.renderFactory();
+    this.showToast(`${result.upgrade?.displayName ?? 'Upgrade'} Lv ${result.nextLevel}`);
   }
 
   private formatOfflineMinutes(seconds: number): number {
