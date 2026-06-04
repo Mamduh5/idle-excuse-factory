@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "typecheck": "tsc --noEmit",
     "test:systems": "tsc -p tsconfig.system-tests.json && vite build --ssr scripts/system-tests.ts --outDir .tmp/system-tests --emptyOutDir && node .tmp/system-tests/system-tests.js",
+    "check": "npm run test:systems && npm run typecheck && npm run build",
     "preview": "vite preview"
   },
   "dependencies": {
