@@ -4,6 +4,7 @@ import { createInitialState } from '../src/state/initialState';
 import { clearSavedGame, normalizeGameState, normalizeSavedGame, saveGameState } from '../src/services/saveService';
 import {
   canRefillCustomerBatch,
+  completeCrafts,
   craftExcuse,
   expireCustomerPatience,
   findFirstAvailableWantedExcuse,
@@ -14,6 +15,7 @@ import {
 import { calculateOfflineEarnings, offlineEarningsCapMs } from '../src/systems/offlineEarnings';
 import {
   calculateUpgradeCost,
+  calculateCraftDurationMs,
   getExcuseStockCap,
   getUpgradeById,
   getUpgradeLevel,
@@ -30,35 +32,78 @@ const nowMs = 1_700_000_000_000;
 
 const tests: TestCase[] = [
   {
-    name: 'crafting increases stock and stops at base cap',
+    name: 'starting a craft does not immediately increase stock',
     run: () => {
       const state = createInitialState(nowMs);
-      const first = craftExcuse(state, 'traffic_jam');
-      assertEqual(first.crafted, true, 'first craft succeeds');
-      assertEqual(first.stock, 1, 'first craft stock');
+      const first = craftExcuse(state, 'traffic_jam', nowMs);
+      assertEqual(first.started, true, 'first craft starts');
+      assertEqual(first.stock, 0, 'reported stock is unchanged');
+      assertEqual(state.excuseStock.traffic_jam, 0, 'stock does not increase immediately');
       assertEqual(first.cap, excuses.traffic_jam.maxStock, 'base cap is used');
+      assert(state.activeCrafts.traffic_jam !== undefined, 'active craft is recorded');
+      assertEqual(state.activeCrafts.traffic_jam?.startedAtMs, nowMs, 'craft start time saved');
+    },
+  },
+  {
+    name: 'craft completion increases stock by 1',
+    run: () => {
+      const state = createInitialState(nowMs);
+      const first = craftExcuse(state, 'traffic_jam', nowMs);
+      assertEqual(first.started, true, 'craft starts');
 
-      for (let index = 0; index < 10; index += 1) {
-        craftExcuse(state, 'traffic_jam');
-      }
+      const early = completeCrafts(state, nowMs + 2_000);
+      assertEqual(early.completed.length, 0, 'craft does not complete early');
+      assertEqual(state.excuseStock.traffic_jam, 0, 'early stock unchanged');
 
-      const overflow = craftExcuse(state, 'traffic_jam');
-      assertEqual(overflow.crafted, false, 'craft over cap is blocked');
+      const completed = completeCrafts(state, nowMs + 3_000);
+      assertEqual(completed.completed.length, 1, 'one craft completes');
+      assertEqual(completed.completed[0].excuseId, 'traffic_jam', 'completed excuse');
+      assertEqual(completed.completed[0].granted, true, 'completed craft grants stock');
+      assertEqual(state.excuseStock.traffic_jam, 1, 'completion grants exactly one stock');
+      assertEqual(state.activeCrafts.traffic_jam, undefined, 'active craft is cleared');
+    },
+  },
+  {
+    name: 'craft cannot start when stock is full',
+    run: () => {
+      const state = createInitialState(nowMs);
+      state.excuseStock.traffic_jam = excuses.traffic_jam.maxStock;
+      const result = craftExcuse(state, 'traffic_jam', nowMs);
+      assertEqual(result.started, false, 'full stock blocks craft');
+      assertEqual(result.reason, 'full', 'full reason');
+      assertEqual(state.activeCrafts.traffic_jam, undefined, 'no active craft starts');
       assertEqual(state.excuseStock.traffic_jam, excuses.traffic_jam.maxStock, 'stock stays at cap');
     },
   },
   {
-    name: 'Bigger Shelf raises stock cap and crafting respects it',
+    name: 'craft cannot start twice for the same excuse',
+    run: () => {
+      const state = createInitialState(nowMs);
+      const first = craftExcuse(state, 'traffic_jam', nowMs);
+      const duplicate = craftExcuse(state, 'traffic_jam', nowMs + 100);
+      assertEqual(first.started, true, 'first craft starts');
+      assertEqual(duplicate.started, false, 'duplicate craft is blocked');
+      assertEqual(duplicate.reason, 'already_crafting', 'duplicate reason');
+      assertEqual(state.excuseStock.traffic_jam, 0, 'duplicate does not add stock');
+      assertEqual(state.activeCrafts.traffic_jam?.startedAtMs, nowMs, 'original craft is preserved');
+    },
+  },
+  {
+    name: 'Bigger Shelf raises stock cap and timed crafting respects it',
     run: () => {
       const state = createInitialState(nowMs);
       state.upgrades.bigger_shelf = 1;
       const upgradedCap = getExcuseStockCap(state, 'traffic_jam');
       assertEqual(upgradedCap, excuses.traffic_jam.maxStock + 2, 'Bigger Shelf cap');
 
-      for (let index = 0; index < upgradedCap + 3; index += 1) {
-        craftExcuse(state, 'traffic_jam');
+      for (let index = 0; index < upgradedCap; index += 1) {
+        const started = craftExcuse(state, 'traffic_jam', nowMs + index * 10_000);
+        assertEqual(started.started, true, 'craft starts under upgraded cap');
+        completeCrafts(state, nowMs + index * 10_000 + 10_000);
       }
 
+      const overflow = craftExcuse(state, 'traffic_jam', nowMs + 100_000);
+      assertEqual(overflow.started, false, 'craft over upgraded cap is blocked');
       assertEqual(state.excuseStock.traffic_jam, upgradedCap, 'stock stays at upgraded cap');
     },
   },
@@ -213,6 +258,21 @@ const tests: TestCase[] = [
     },
   },
   {
+    name: 'printer upgrade reduces craft duration',
+    run: () => {
+      const state = createInitialState(nowMs);
+      const baseDuration = calculateCraftDurationMs(state, 'traffic_jam');
+      state.currencies.coins = 1_000;
+
+      const result = purchaseUpgrade(state, 'extra_printer', nowMs + 100);
+      assertEqual(result.purchased, true, 'printer upgrade is buyable');
+      assertEqual(getUpgradeLevel(state, 'extra_printer'), 1, 'printer level increased');
+      const upgradedDuration = calculateCraftDurationMs(state, 'traffic_jam');
+      assertEqual(upgradedDuration < baseDuration, true, 'printer upgrade reduces duration');
+      assertEqual(upgradedDuration, Math.ceil(baseDuration / 1.1), 'printer formula divides by speed multiplier');
+    },
+  },
+  {
     name: 'offline earnings ignore short and negative durations',
     run: () => {
       assertEqual(calculateOfflineEarnings(nowMs - 29_000, nowMs), undefined, 'under 30 seconds earns nothing');
@@ -293,6 +353,86 @@ const tests: TestCase[] = [
       assertEqual(normalized.activeCustomers.length, 3, 'invalid customer list falls back');
       assertEqual(normalized.customerBatchNumber, 0, 'negative batch sanitizes');
       assertEqual(normalized.lastUpdatedAtMs, nowMs, 'invalid timestamp falls back');
+    },
+  },
+  {
+    name: 'initial state has no active crafts',
+    run: () => {
+      const state = createInitialState(nowMs);
+      assertEqual(Object.keys(state.activeCrafts).length, 0, 'initial active crafts are empty');
+    },
+  },
+  {
+    name: 'save normalization handles active crafts safely',
+    run: () => {
+      const normalized = normalizeGameState(
+        {
+          ...createRawStateWithCustomers([]),
+          activeCrafts: {
+            traffic_jam: 'bad craft',
+            battery_dead: {
+              startedAtMs: nowMs - 1_000,
+              completesAtMs: nowMs + 3_000,
+            },
+            unknown_excuse: {
+              startedAtMs: nowMs - 1_000,
+              completesAtMs: nowMs + 3_000,
+            },
+          },
+        },
+        nowMs,
+      );
+
+      assertEqual(normalized.activeCrafts.traffic_jam, undefined, 'invalid craft is ignored');
+      assert(normalized.activeCrafts.battery_dead !== undefined, 'valid active craft persists');
+      assertEqual(normalized.activeCrafts.battery_dead?.completesAtMs, nowMs + 3_000, 'future completion time persists');
+      assertEqual(normalized.activeCrafts.just_saw_message, undefined, 'missing active craft defaults empty');
+    },
+  },
+  {
+    name: 'completed craft during load grants at most one stock and clears craft',
+    run: () => {
+      const normalized = normalizeGameState(
+        {
+          ...createRawStateWithCustomers([]),
+          excuseStock: {
+            traffic_jam: 4,
+          },
+          activeCrafts: {
+            traffic_jam: {
+              startedAtMs: nowMs - 10_000,
+              completesAtMs: nowMs - 7_000,
+            },
+          },
+        },
+        nowMs,
+      );
+
+      assertEqual(normalized.excuseStock.traffic_jam, 5, 'completed craft grants exactly one stock');
+      assertEqual(normalized.activeCrafts.traffic_jam, undefined, 'completed craft clears active craft');
+    },
+  },
+  {
+    name: 'completed craft during load does not exceed stock cap',
+    run: () => {
+      const normalized = normalizeGameState(
+        {
+          ...createRawStateWithCustomers([]),
+          excuseStock: {
+            traffic_jam: excuses.traffic_jam.maxStock,
+          },
+          activeCrafts: {
+            traffic_jam: {
+              startedAtMs: nowMs - 10_000,
+              completesAtMs: nowMs - 7_000,
+            },
+          },
+        },
+        nowMs,
+      );
+
+      assertEqual(normalized.excuseStock.traffic_jam, excuses.traffic_jam.maxStock, 'stock remains capped');
+      assertEqual(normalized.activeCrafts.traffic_jam, undefined, 'capped completed craft is cleared');
     },
   },
   {
@@ -433,6 +573,7 @@ const tests: TestCase[] = [
       assertEqual(devSaveSeedDefinitions.length, 5, 'all dev QA seeds are listed');
 
       const oneInactive = createDevSaveSeed('partial_one_inactive', nowMs);
+      assertEqual(Object.keys(oneInactive.state.activeCrafts).length, 0, 'one inactive seed has no active crafts');
       assertEqual(oneInactive.state.activeCustomers.length, 1, 'one inactive seed writes a raw partial queue');
       assertEqual(oneInactive.state.activeCustomers[0].status, 'served', 'one inactive seed is cleared');
       const oneInactiveLoaded = normalizeSavedGame(oneInactive, nowMs);
@@ -440,12 +581,14 @@ const tests: TestCase[] = [
       assertEqual(canRefillCustomerBatch(oneInactiveLoaded), true, 'one inactive seed loads refillable');
 
       const twoInactive = createDevSaveSeed('partial_two_inactive', nowMs);
+      assertEqual(Object.keys(twoInactive.state.activeCrafts).length, 0, 'two inactive seed has no active crafts');
       assertEqual(twoInactive.state.activeCustomers.length, 2, 'two inactive seed writes a raw partial queue');
       const twoInactiveLoaded = normalizeSavedGame(twoInactive, nowMs);
       assertEqual(twoInactiveLoaded.activeCustomers.length, 3, 'two inactive seed loads into three slots');
       assertEqual(canRefillCustomerBatch(twoInactiveLoaded), true, 'two inactive seed loads refillable');
 
       const oneWaiting = createDevSaveSeed('partial_one_waiting', nowMs);
+      assertEqual(Object.keys(oneWaiting.state.activeCrafts).length, 0, 'one waiting seed has no active crafts');
       assertEqual(oneWaiting.state.activeCustomers.length, 1, 'one waiting seed writes a raw partial queue');
       assertEqual(oneWaiting.state.activeCustomers[0].status, 'waiting', 'one waiting seed keeps a waiting customer');
       const oneWaitingLoaded = normalizeSavedGame(oneWaiting, nowMs);

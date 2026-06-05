@@ -18,6 +18,7 @@ export function createInitialState(nowMs = Date.now()): GameState {
     },
     currentZoneId: 'daily_life',
     excuseStock: { ...starterStock },
+    activeCrafts: {},
     activeCustomers: [
       {
         instanceId: 'starter-late-worker',

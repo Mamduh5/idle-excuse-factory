@@ -5,10 +5,13 @@ import type { ExcuseId, GameState, UpgradeDefinition } from '../types/game';
 export const stockCapUpgradeId = 'bigger_shelf';
 export const coinRewardUpgradeId = 'premium_bullshit';
 export const smoothnessRewardUpgradeId = 'smoother_words';
+export const printerSpeedUpgradeId = 'extra_printer';
 
 const stockCapBonusPerLevel = 2;
 const coinRewardBonusPerLevel = 0.1;
 const smoothnessBonusPerLevel = 1;
+const printerSpeedBonusPerLevel = 0.1;
+const minCraftDurationMs = 500;
 const defaultCostGrowth = 1.45;
 
 export type UpgradePurchaseResult = {
@@ -116,6 +119,15 @@ export function calculateServeSmoothness(state: GameState, baseSmoothness: numbe
   return sanitizeCount(sanitizeCount(baseSmoothness) + smoothLevel * smoothnessBonusPerLevel);
 }
 
+export function calculateCraftDurationMs(state: GameState, excuseId: ExcuseId): number {
+  const baseSeconds = excuses[excuseId].craftSeconds;
+  const baseMs = Math.max(minCraftDurationMs, sanitizePositiveNumber(baseSeconds, 1) * 1000);
+  const printerLevel = getUpgradeLevel(state, printerSpeedUpgradeId);
+  const speedMultiplier = 1 + printerLevel * printerSpeedBonusPerLevel;
+  const duration = Math.ceil(baseMs / speedMultiplier);
+  return Math.max(minCraftDurationMs, sanitizeCount(duration));
+}
+
 function emptyPurchaseResult(upgrade: UpgradeDefinition | undefined, reason: UpgradePurchaseResult['reason']): UpgradePurchaseResult {
   const maxLevel = upgrade ? sanitizeCount(upgrade.maxLevel) : 0;
   return {
@@ -131,4 +143,8 @@ function emptyPurchaseResult(upgrade: UpgradeDefinition | undefined, reason: Upg
 
 function sanitizeCount(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+function sanitizePositiveNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback;
 }

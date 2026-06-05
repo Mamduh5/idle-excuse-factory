@@ -9,6 +9,7 @@ import { clearSavedGame, loadGameState, saveGameState, type LoadSaveResult } fro
 import { createInitialState } from '../state/initialState';
 import {
   canRefillCustomerBatch,
+  completeCrafts,
   craftExcuse,
   expireCustomerPatience,
   getCustomerPatienceRemainingMs,
@@ -95,24 +96,33 @@ export class FactoryScene extends Phaser.Scene {
     }
 
     this.lastPatienceRenderSecond = currentSecond;
+    const craftResult = completeCrafts(this.state, nowMs);
+    const hasActiveCrafts = this.hasActiveCrafts();
     const hasWaitingCustomers = this.state.activeCustomers.some((customer) => customer.status === 'waiting');
-    if (!hasWaitingCustomers) {
+    if (!hasWaitingCustomers && !hasActiveCrafts && craftResult.completed.length === 0) {
       return;
     }
 
-    const result = expireCustomerPatience(this.state, nowMs);
+    const result = hasWaitingCustomers ? expireCustomerPatience(this.state, nowMs) : { expiredInstanceIds: [] };
     const selectedExpired = this.selectedCustomerInstanceId !== undefined
       && result.expiredInstanceIds.includes(this.selectedCustomerInstanceId);
     if (selectedExpired) {
       this.selectedCustomerInstanceId = undefined;
     }
 
-    if (result.expiredInstanceIds.length > 0) {
+    const grantedCraft = craftResult.completed.find((craft) => craft.granted);
+    if (grantedCraft) {
+      this.scheduleStockFlash(grantedCraft.excuseId, 'craft');
+    }
+
+    if (result.expiredInstanceIds.length > 0 || craftResult.completed.length > 0) {
       this.saveProgress();
     }
 
     this.renderFactory();
-    if (result.expiredInstanceIds.length > 0) {
+    if (grantedCraft) {
+      this.showToast(`ผลิต ${excuses[grantedCraft.excuseId].displayName} แล้ว ${grantedCraft.stock}/${grantedCraft.cap}`);
+    } else if (result.expiredInstanceIds.length > 0) {
       this.showToast('ลูกค้ารอไม่ไหวแล้ว...');
     }
   }
@@ -553,13 +563,25 @@ export class FactoryScene extends Phaser.Scene {
     const buttonHeight = Math.max(layout.compact ? 30 : 36, Math.min(layout.compact ? 38 : 44, Math.floor((inner.height - (buttonTop - inner.y) - buttonGap * 2) / 3)));
     const selectedCustomer = this.getSelectedCustomer();
     const missingAllAcceptedStock = selectedCustomer !== undefined && !hasMatchingStock(this.state, selectedCustomer);
+    const nowMs = Date.now();
     const buttons = starterExcuseIds.map((id, index) => {
       const selectedWants = this.selectedCustomerWants(id);
       const stockMissing = selectedWants && missingAllAcceptedStock;
       const excuseLabel = layout.compact ? excuses[id].shortLabel : excuses[id].displayName;
-      const label = stockMissing
-        ? `ผลิต ${excuseLabel} · ควรผลิต`
-        : `ผลิต ${excuseLabel}`;
+      const stock = this.state.excuseStock[id];
+      const cap = getExcuseStockCap(this.state, id);
+      const activeCraft = this.state.activeCrafts[id];
+      const remainingSeconds = activeCraft
+        ? Math.max(1, Math.ceil((activeCraft.completesAtMs - nowMs) / 1000))
+        : 0;
+      const full = stock >= cap;
+      const label = activeCraft
+        ? `กำลังผลิต... ${remainingSeconds}s`
+        : full
+          ? layout.compact ? `เต็ม ${stock}/${cap}` : `เต็มแล้ว ${stock}/${cap}`
+          : stockMissing
+            ? `ผลิต ${excuseLabel} · ควรผลิต`
+            : `ผลิต ${excuseLabel}`;
       const y = buttonTop + index * (buttonHeight + buttonGap);
       return addButton(
         this,
@@ -567,9 +589,9 @@ export class FactoryScene extends Phaser.Scene {
         label,
         () => this.handleCraft(id),
         {
-          fontSize: stockMissing ? layout.compact ? 10 : 12 : layout.compact ? 11 : 14,
-          fillColor: stockMissing ? colors.panelNeeded : undefined,
-          pressedColor: stockMissing ? colors.accent : undefined,
+          fontSize: activeCraft || full || stockMissing ? layout.compact ? 10 : 12 : layout.compact ? 11 : 14,
+          fillColor: activeCraft ? colors.panelNeeded : full ? colors.panelEmpty : stockMissing ? colors.panelNeeded : undefined,
+          pressedColor: activeCraft || full ? colors.panelEmpty : stockMissing ? colors.accent : undefined,
         },
       );
     });
@@ -1297,16 +1319,15 @@ export class FactoryScene extends Phaser.Scene {
     const result = craftExcuse(this.state, excuseId);
     const excuse = excuses[excuseId];
 
-    if (!result.crafted) {
+    if (!result.started) {
       this.renderFactory();
-      this.showToast('ข้ออ้างเต็มแล้ว!');
+      this.showToast(result.reason === 'already_crafting' ? 'กำลังผลิตอยู่' : 'ข้ออ้างเต็มแล้ว!');
       return;
     }
 
-    this.scheduleStockFlash(result.excuseId, 'craft');
     this.saveProgress();
     this.renderFactory();
-    this.showToast(`ผลิต ${excuse.displayName} แล้ว ${result.stock}/${result.cap}`);
+    this.showToast(`เริ่มผลิต ${excuse.displayName} ${Math.ceil((result.durationMs ?? 0) / 1000)}s`);
   }
 
   private handleNextBatch(): void {
@@ -1411,6 +1432,10 @@ export class FactoryScene extends Phaser.Scene {
 
   private selectedCustomerWants(excuseId: ExcuseId): boolean {
     return this.getSelectedWantedExcuseIds().includes(excuseId);
+  }
+
+  private hasActiveCrafts(): boolean {
+    return starterExcuseIds.some((excuseId) => this.state.activeCrafts[excuseId] !== undefined);
   }
 
   private formatWantedExcuseNames(excuseIds: ExcuseId[]): string {

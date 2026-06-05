@@ -6,6 +6,7 @@ import { createInitialState } from '../state/initialState';
 import { getCustomerPatienceMs } from '../systems/gameplay';
 import { getExcuseStockCapForLevel, stockCapUpgradeId } from '../systems/upgrades';
 import type {
+  ActiveCraftState,
   CustomerInstance,
   ExcuseId,
   ExcuseStock,
@@ -113,11 +114,13 @@ export function normalizeGameState(rawState: unknown, nowMs: number, fallbackUpd
   }
 
   const normalizedUpgrades = normalizeUpgrades(rawState.upgrades);
+  const normalizedStock = normalizeExcuseStock(rawState.excuseStock, normalizedUpgrades);
 
   return {
     currencies: normalizeCurrencies(rawState.currencies),
     currentZoneId,
-    excuseStock: normalizeExcuseStock(rawState.excuseStock, normalizedUpgrades),
+    excuseStock: normalizedStock,
+    activeCrafts: normalizeActiveCrafts(rawState.activeCrafts, normalizedStock, normalizedUpgrades, nowMs),
     activeCustomers: normalizeCustomers(rawState.activeCustomers, nowMs, initial.activeCustomers),
     customerBatchNumber: sanitizeCount(rawState.customerBatchNumber),
     upgrades: normalizedUpgrades,
@@ -145,6 +148,47 @@ function normalizeExcuseStock(value: unknown, normalizedUpgrades: UpgradeState):
     stock[id] = Math.min(getExcuseStockCapForLevel(id, shelfLevel), sanitizeCount(rawCount));
   });
   return stock;
+}
+
+function normalizeActiveCrafts(
+  value: unknown,
+  stock: ExcuseStock,
+  normalizedUpgrades: UpgradeState,
+  nowMs: number,
+): ActiveCraftState {
+  const activeCrafts: ActiveCraftState = {};
+  if (!isRecord(value)) {
+    return activeCrafts;
+  }
+
+  const shelfLevel = sanitizeCount(normalizedUpgrades[stockCapUpgradeId]);
+  starterExcuseIds.forEach((id) => {
+    const rawCraft = value[id];
+    if (!isRecord(rawCraft)) {
+      return;
+    }
+
+    const startedAtMs = sanitizeTimestamp(rawCraft.startedAtMs, nowMs);
+    const completesAtMs = sanitizeTimestamp(rawCraft.completesAtMs, nowMs);
+    const cap = getExcuseStockCapForLevel(id, shelfLevel);
+
+    if (stock[id] >= cap) {
+      stock[id] = cap;
+      return;
+    }
+
+    if (completesAtMs <= nowMs) {
+      stock[id] = Math.min(cap, stock[id] + 1);
+      return;
+    }
+
+    activeCrafts[id] = {
+      startedAtMs: Math.min(startedAtMs, nowMs),
+      completesAtMs,
+    };
+  });
+
+  return activeCrafts;
 }
 
 function normalizeCustomers(value: unknown, nowMs: number, fallback: CustomerInstance[]): CustomerInstance[] {

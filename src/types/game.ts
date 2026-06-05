@@ -13,9 +13,17 @@ export type ExcuseDefinition = {
   starter: boolean;
   baseValue: number;
   maxStock: number;
+  craftSeconds: number;
 };
 
 export type ExcuseStock = Record<ExcuseId, number>;
+
+export type ActiveCraft = {
+  startedAtMs: number;
+  completesAtMs: number;
+};
+
+export type ActiveCraftState = Partial<Record<ExcuseId, ActiveCraft>>;
 
 export type CustomerDefinition = {
   id: string;
@@ -67,6 +75,7 @@ export type GameState = {
   currencies: CurrencyState;
   currentZoneId: ZoneDefinition['id'];
   excuseStock: ExcuseStock;
+  activeCrafts: ActiveCraftState;
   activeCustomers: CustomerInstance[];
   customerBatchNumber: number;
   upgrades: UpgradeState;

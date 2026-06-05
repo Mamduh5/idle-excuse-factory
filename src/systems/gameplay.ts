@@ -7,16 +7,30 @@ import type {
   GameState,
 } from '../types/game';
 import {
+  calculateCraftDurationMs,
   calculateServeCoins,
   calculateServeSmoothness,
   getExcuseStockCap,
 } from './upgrades';
 
 export type CraftResult = {
-  crafted: boolean;
+  durationMs?: number;
+  reason?: 'already_crafting' | 'full';
   excuseId: ExcuseId;
+  started: boolean;
   stock: number;
   cap: number;
+};
+
+export type CraftCompletion = {
+  cap: number;
+  excuseId: ExcuseId;
+  granted: boolean;
+  stock: number;
+};
+
+export type CraftCompletionResult = {
+  completed: CraftCompletion[];
 };
 
 export type ServeResult = {
@@ -38,29 +52,80 @@ export type PatienceTickResult = {
 
 const customerById = new Map(customers.map((customer) => [customer.id, customer]));
 
-export function craftExcuse(state: GameState, excuseId: ExcuseId): CraftResult {
+export function craftExcuse(state: GameState, excuseId: ExcuseId, nowMs = Date.now()): CraftResult {
+  return startCraft(state, excuseId, nowMs);
+}
+
+export function startCraft(state: GameState, excuseId: ExcuseId, nowMs = Date.now()): CraftResult {
+  state.activeCrafts ??= {};
   const currentStock = sanitizeCount(state.excuseStock[excuseId]);
   const cap = getExcuseStockCap(state, excuseId);
 
   if (currentStock >= cap) {
     state.excuseStock[excuseId] = cap;
     return {
-      crafted: false,
+      reason: 'full',
       excuseId,
+      started: false,
       stock: cap,
       cap,
     };
   }
 
-  const nextStock = Math.min(cap, currentStock + 1);
-  state.excuseStock[excuseId] = nextStock;
+  if (state.activeCrafts[excuseId]) {
+    return {
+      reason: 'already_crafting',
+      excuseId,
+      started: false,
+      stock: currentStock,
+      cap,
+    };
+  }
+
+  const durationMs = calculateCraftDurationMs(state, excuseId);
+  state.activeCrafts[excuseId] = {
+    startedAtMs: nowMs,
+    completesAtMs: nowMs + durationMs,
+  };
+  state.lastUpdatedAtMs = nowMs;
 
   return {
-    crafted: true,
+    durationMs,
     excuseId,
-    stock: nextStock,
+    started: true,
+    stock: currentStock,
     cap,
   };
+}
+
+export function completeCrafts(state: GameState, nowMs = Date.now()): CraftCompletionResult {
+  state.activeCrafts ??= {};
+  const completed: CraftCompletion[] = [];
+
+  (Object.keys(excuses) as ExcuseId[]).forEach((excuseId) => {
+    const craft = state.activeCrafts[excuseId];
+    if (!craft || sanitizeTimestamp(craft.completesAtMs, nowMs) > nowMs) {
+      return;
+    }
+
+    const cap = getExcuseStockCap(state, excuseId);
+    const currentStock = Math.min(cap, sanitizeCount(state.excuseStock[excuseId]));
+    const nextStock = Math.min(cap, currentStock + 1);
+    state.excuseStock[excuseId] = nextStock;
+    delete state.activeCrafts[excuseId];
+    completed.push({
+      cap,
+      excuseId,
+      granted: nextStock > currentStock,
+      stock: nextStock,
+    });
+  });
+
+  if (completed.length > 0) {
+    state.lastUpdatedAtMs = nowMs;
+  }
+
+  return { completed };
 }
 
 export function serveCustomerByInstanceId(state: GameState, instanceId: string, nowMs = Date.now()): ServeResult {

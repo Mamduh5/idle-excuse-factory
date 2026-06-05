@@ -9,6 +9,7 @@ export const excuses: Record<ExcuseId, ExcuseDefinition> = {
     starter: true,
     baseValue: 10,
     maxStock: 5,
+    craftSeconds: 3,
   },
   battery_dead: {
     id: 'battery_dead',
@@ -18,6 +19,7 @@ export const excuses: Record<ExcuseId, ExcuseDefinition> = {
     starter: true,
     baseValue: 12,
     maxStock: 5,
+    craftSeconds: 4,
   },
   just_saw_message: {
     id: 'just_saw_message',
@@ -27,6 +29,7 @@ export const excuses: Record<ExcuseId, ExcuseDefinition> = {
     starter: true,
     baseValue: 15,
     maxStock: 5,
+    craftSeconds: 5,
   },
 };
 

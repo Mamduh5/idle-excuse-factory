@@ -34,11 +34,11 @@ export const upgrades: UpgradeDefinition[] = [
   {
     id: 'extra_printer',
     displayName: 'เครื่องพิมพ์ข้ออ้าง',
-    description: 'จะเพิ่มสปีดผลิตเมื่อมีระบบจับเวลา',
-    effectLabel: 'Soon',
+    description: 'ลดเวลาผลิตข้ออ้าง ให้เครื่องพิมพ์ทำงานไวขึ้น',
+    effectLabel: '+10% craft speed / level',
     costCoins: 50,
     costGrowth: 1.4,
-    implemented: false,
+    implemented: true,
     maxLevel: 5,
   },
 ];
