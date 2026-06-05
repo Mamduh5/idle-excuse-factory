@@ -564,7 +564,7 @@ export class FactoryScene extends Phaser.Scene {
     const selectedCustomer = this.getSelectedCustomer();
     const missingAllAcceptedStock = selectedCustomer !== undefined && !hasMatchingStock(this.state, selectedCustomer);
     const nowMs = Date.now();
-    const buttons = starterExcuseIds.map((id, index) => {
+    const buttons = starterExcuseIds.flatMap((id, index) => {
       const selectedWants = this.selectedCustomerWants(id);
       const stockMissing = selectedWants && missingAllAcceptedStock;
       const excuseLabel = layout.compact ? excuses[id].shortLabel : excuses[id].displayName;
@@ -583,9 +583,10 @@ export class FactoryScene extends Phaser.Scene {
             ? `ผลิต ${excuseLabel} · ควรผลิต`
             : `ผลิต ${excuseLabel}`;
       const y = buttonTop + index * (buttonHeight + buttonGap);
-      return addButton(
+      const buttonRect = { x: inner.x, y, width: inner.width, height: buttonHeight };
+      const button = addButton(
         this,
-        { x: inner.x, y, width: inner.width, height: buttonHeight },
+        buttonRect,
         label,
         () => this.handleCraft(id),
         {
@@ -594,9 +595,44 @@ export class FactoryScene extends Phaser.Scene {
           pressedColor: activeCraft || full ? colors.panelEmpty : stockMissing ? colors.accent : undefined,
         },
       );
+      const progressBar = activeCraft
+        ? this.renderCraftProgressBar(buttonRect, activeCraft.startedAtMs, activeCraft.completesAtMs, nowMs, layout.compact)
+        : [];
+      return [...button.group.getChildren(), ...progressBar];
     });
 
-    this.addToUi(panel, heading, ...buttons.flatMap((button) => button.group.getChildren()));
+    this.addToUi(panel, heading, ...buttons);
+  }
+
+  private renderCraftProgressBar(
+    rect: Rect,
+    startedAtMs: number,
+    completesAtMs: number,
+    nowMs: number,
+    compact: boolean,
+  ): Phaser.GameObjects.GameObject[] {
+    const durationMs = Math.max(1, completesAtMs - startedAtMs);
+    const elapsedMs = Math.max(0, nowMs - startedAtMs);
+    const progress = Math.max(0, Math.min(1, elapsedMs / durationMs));
+    const barInset = compact ? 12 : 14;
+    const barHeight = compact ? 4 : 5;
+    const barRect = {
+      x: rect.x + barInset,
+      y: rect.y + rect.height - (compact ? 8 : 9),
+      width: rect.width - barInset * 2,
+      height: barHeight,
+    };
+    const fillWidth = Math.max(0, Math.floor(barRect.width * progress));
+    const track = this.add.graphics()
+      .fillStyle(colors.progressTrack, 1)
+      .lineStyle(1, colors.borderSoft, 1)
+      .fillRoundedRect(barRect.x, barRect.y, barRect.width, barRect.height, barHeight)
+      .strokeRoundedRect(barRect.x, barRect.y, barRect.width, barRect.height, barHeight);
+    const fill = this.add.graphics()
+      .fillStyle(colors.progressFill, 1)
+      .fillRoundedRect(barRect.x, barRect.y, fillWidth, barRect.height, barHeight);
+
+    return [track, fill];
   }
 
   private renderFooter(layout: FactoryLayout): void {

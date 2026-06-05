@@ -18,6 +18,8 @@ export const colors = {
   shadow: 0x9b6b48,
   accent: 0xffc64f,
   accentPressed: 0xf29b2e,
+  progressTrack: 0xf7e4bd,
+  progressFill: 0x43a65a,
   greenPanel: 0xedf9d8,
   craftPanel: 0xffe0bd,
   white: 0xffffff,
