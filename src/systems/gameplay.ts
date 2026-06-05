@@ -46,11 +46,22 @@ export type RefillResult = {
   batchNumber: number;
 };
 
+export type CustomerArrivalResult = {
+  arrived: boolean;
+  customer?: CustomerInstance;
+  nextCustomerArrivesAtMs: number;
+  reason?: 'not_due' | 'queue_full' | 'missing_definition';
+};
+
 export type PatienceTickResult = {
   expiredInstanceIds: string[];
 };
 
+export const customerQueueCapacity = 3;
+export const customerArrivalIntervalMs = 10_000;
+
 const customerById = new Map(customers.map((customer) => [customer.id, customer]));
+const customerArrivalRotationIds = ['late_worker', 'missing_student', 'ghost_texter'] as const;
 
 export function craftExcuse(state: GameState, excuseId: ExcuseId, nowMs = Date.now()): CraftResult {
   return startCraft(state, excuseId, nowMs);
@@ -170,6 +181,69 @@ export function canRefillCustomerBatch(state: GameState): boolean {
   return state.activeCustomers.every((customer) => customer.status !== 'waiting');
 }
 
+export function hasCustomerArrivalRoom(state: GameState): boolean {
+  return state.activeCustomers.length < customerQueueCapacity
+    || state.activeCustomers.slice(0, customerQueueCapacity).some((customer) => customer.status !== 'waiting');
+}
+
+export function getNextCustomerArrivalRemainingMs(state: GameState, nowMs = Date.now()): number {
+  if (!hasCustomerArrivalRoom(state)) {
+    return 0;
+  }
+
+  const nextArrivalAtMs = sanitizeTimestamp(state.nextCustomerArrivesAtMs, nowMs + customerArrivalIntervalMs);
+  return Math.max(0, nextArrivalAtMs - nowMs);
+}
+
+export function addTimedCustomerArrival(state: GameState, nowMs = Date.now()): CustomerArrivalResult {
+  const nextArrivalAtMs = sanitizeTimestamp(state.nextCustomerArrivesAtMs, nowMs);
+  if (nextArrivalAtMs > nowMs) {
+    return {
+      arrived: false,
+      nextCustomerArrivesAtMs: nextArrivalAtMs,
+      reason: 'not_due',
+    };
+  }
+
+  if (!hasCustomerArrivalRoom(state)) {
+    return {
+      arrived: false,
+      nextCustomerArrivesAtMs: nextArrivalAtMs,
+      reason: 'queue_full',
+    };
+  }
+
+  const rotationIndex = sanitizeCount(state.customerArrivalIndex);
+  const customerId = customerArrivalRotationIds[rotationIndex % customerArrivalRotationIds.length];
+  const definition = customerById.get(customerId);
+  if (!definition) {
+    state.nextCustomerArrivesAtMs = nowMs + customerArrivalIntervalMs;
+    return {
+      arrived: false,
+      nextCustomerArrivesAtMs: state.nextCustomerArrivesAtMs,
+      reason: 'missing_definition',
+    };
+  }
+
+  const customer = createCustomerInstance(definition, `arrival-${nowMs}-${rotationIndex}-${definition.id}`, nowMs);
+  const replaceIndex = state.activeCustomers.findIndex((candidate) => candidate.status !== 'waiting');
+  if (replaceIndex >= 0 && replaceIndex < customerQueueCapacity) {
+    state.activeCustomers[replaceIndex] = customer;
+  } else {
+    state.activeCustomers = [...state.activeCustomers.slice(0, customerQueueCapacity - 1), customer];
+  }
+
+  state.customerArrivalIndex = rotationIndex + 1;
+  state.nextCustomerArrivesAtMs = nowMs + customerArrivalIntervalMs;
+  state.lastUpdatedAtMs = nowMs;
+
+  return {
+    arrived: true,
+    customer,
+    nextCustomerArrivesAtMs: state.nextCustomerArrivesAtMs,
+  };
+}
+
 export function refillCustomerBatch(state: GameState, nowMs = Date.now()): RefillResult {
   if (!canRefillCustomerBatch(state)) {
     return {
@@ -181,6 +255,7 @@ export function refillCustomerBatch(state: GameState, nowMs = Date.now()): Refil
   const batchNumber = sanitizeCount(state.customerBatchNumber) + 1;
   state.customerBatchNumber = batchNumber;
   state.activeCustomers = createCustomerBatch(batchNumber, nowMs);
+  state.nextCustomerArrivesAtMs = nowMs + customerArrivalIntervalMs;
   state.lastUpdatedAtMs = nowMs;
 
   return {
@@ -190,14 +265,26 @@ export function refillCustomerBatch(state: GameState, nowMs = Date.now()): Refil
 }
 
 export function createCustomerBatch(batchNumber: number, nowMs: number): CustomerInstance[] {
-  return customers.slice(0, 3).map((customer, index) => ({
-    instanceId: `batch-${batchNumber}-${index}-${customer.id}`,
+  return customers.slice(0, customerQueueCapacity).map((customer, index) => createCustomerInstance(
+    customer,
+    `batch-${batchNumber}-${index}-${customer.id}`,
+    nowMs,
+  ));
+}
+
+function createCustomerInstance(
+  customer: CustomerDefinition,
+  instanceId: string,
+  nowMs: number,
+): CustomerInstance {
+  return {
+    instanceId,
     customerId: customer.id,
     wantedExcuseIds: [...customer.wantedExcuseIds],
     patienceRemainingMs: getCustomerPatienceMs(customer),
     createdAtMs: nowMs,
     status: 'waiting',
-  }));
+  };
 }
 
 export function expireCustomerPatience(state: GameState, nowMs = Date.now()): PatienceTickResult {

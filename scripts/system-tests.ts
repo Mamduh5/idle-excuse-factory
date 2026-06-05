@@ -3,9 +3,12 @@ import { createDevSaveSeed, devSaveSeedDefinitions } from '../src/services/devSa
 import { createInitialState } from '../src/state/initialState';
 import { clearSavedGame, normalizeGameState, normalizeSavedGame, saveGameState } from '../src/services/saveService';
 import {
+  addTimedCustomerArrival,
   canRefillCustomerBatch,
   completeCrafts,
   craftExcuse,
+  customerArrivalIntervalMs,
+  customerQueueCapacity,
   expireCustomerPatience,
   findFirstAvailableWantedExcuse,
   getCustomerPatienceRemainingMs,
@@ -198,6 +201,128 @@ const tests: TestCase[] = [
         true,
         'new batch has fresh patience',
       );
+    },
+  },
+  {
+    name: 'timed arrival adds one customer when timer elapsed and room exists',
+    run: () => {
+      const state = createInitialState(nowMs);
+      state.activeCustomers[0].status = 'served';
+      state.activeCustomers[0].patienceRemainingMs = 0;
+      state.nextCustomerArrivesAtMs = nowMs - 1;
+
+      const result = addTimedCustomerArrival(state, nowMs);
+
+      assertEqual(result.arrived, true, 'elapsed timer creates a customer');
+      assertEqual(state.activeCustomers.length, customerQueueCapacity, 'queue stays at visible capacity');
+      assertEqual(state.activeCustomers[0].status, 'waiting', 'inactive slot is replaced');
+      assertEqual(state.activeCustomers[0].customerId, 'late_worker', 'first rotated customer arrives');
+      assertEqual(state.customerArrivalIndex, 1, 'arrival index advances once');
+      assertEqual(state.nextCustomerArrivesAtMs, nowMs + customerArrivalIntervalMs, 'next arrival is scheduled');
+    },
+  },
+  {
+    name: 'timed arrival does not exceed three visible slots',
+    run: () => {
+      const state = createInitialState(nowMs);
+      state.nextCustomerArrivesAtMs = nowMs - 1;
+
+      const result = addTimedCustomerArrival(state, nowMs);
+
+      assertEqual(result.arrived, false, 'full queue blocks timed arrival');
+      assertEqual(result.reason, 'queue_full', 'full queue reason');
+      assertEqual(state.activeCustomers.length, customerQueueCapacity, 'queue length stays capped');
+      assertEqual(state.customerArrivalIndex, 0, 'blocked arrival does not rotate');
+    },
+  },
+  {
+    name: 'timed arrival uses deterministic customer rotation',
+    run: () => {
+      const state = createInitialState(nowMs);
+      state.activeCustomers = state.activeCustomers.map((customer) => ({
+        ...customer,
+        patienceRemainingMs: 0,
+        status: 'left',
+      }));
+
+      const arrivedIds: string[] = [];
+      for (let index = 0; index < 4; index += 1) {
+        state.activeCustomers[index % customerQueueCapacity].status = 'left';
+        state.nextCustomerArrivesAtMs = nowMs + index;
+        const result = addTimedCustomerArrival(state, nowMs + index);
+        assertEqual(result.arrived, true, `arrival ${index + 1} succeeds`);
+        assert(result.customer !== undefined, `arrival ${index + 1} returns customer`);
+        arrivedIds.push(result.customer.customerId);
+      }
+
+      assertEqual(arrivedIds.join(','), 'late_worker,missing_student,ghost_texter,late_worker', 'rotation repeats predictably');
+    },
+  },
+  {
+    name: 'timed arrival creates fresh patience',
+    run: () => {
+      const state = createInitialState(nowMs);
+      state.activeCustomers[1].status = 'left';
+      state.activeCustomers[1].patienceRemainingMs = 0;
+      state.customerArrivalIndex = 1;
+      state.nextCustomerArrivesAtMs = nowMs;
+
+      const result = addTimedCustomerArrival(state, nowMs);
+
+      assertEqual(result.arrived, true, 'arrival succeeds');
+      assertEqual(state.activeCustomers[1].customerId, 'missing_student', 'second rotated customer arrives');
+      assertEqual(getCustomerPatienceRemainingMs(state.activeCustomers[1], nowMs), 55_000, 'new customer has full patience');
+      assertEqual(state.activeCustomers[1].createdAtMs, nowMs, 'new patience starts now');
+    },
+  },
+  {
+    name: 'arrival timer persists and normalizes safely',
+    run: () => {
+      const future = normalizeGameState(
+        {
+          ...createRawStateWithCustomers([]),
+          customerArrivalIndex: 2.8,
+          nextCustomerArrivesAtMs: nowMs + customerArrivalIntervalMs * 5,
+        },
+        nowMs,
+      );
+      assertEqual(future.customerArrivalIndex, 2, 'arrival index sanitizes');
+      assertEqual(future.nextCustomerArrivesAtMs, nowMs + customerArrivalIntervalMs, 'far future arrival clamps to one interval');
+
+      const elapsed = normalizeGameState(
+        {
+          ...createRawStateWithCustomers([]),
+          nextCustomerArrivesAtMs: nowMs - 60_000,
+        },
+        nowMs,
+      );
+      assertEqual(elapsed.nextCustomerArrivesAtMs, nowMs, 'elapsed arrival can run immediately after load');
+
+      const missing = normalizeGameState(createRawStateWithCustomers([]), nowMs);
+      assertEqual(missing.nextCustomerArrivesAtMs, nowMs + customerArrivalIntervalMs, 'missing arrival timer defaults safely');
+    },
+  },
+  {
+    name: 'manual refill still creates three customers and resets arrival timer',
+    run: () => {
+      const state = createInitialState(nowMs);
+      state.activeCustomers = state.activeCustomers.map((customer) => ({
+        ...customer,
+        patienceRemainingMs: 0,
+        status: 'left',
+      }));
+      state.nextCustomerArrivesAtMs = nowMs - 10_000;
+
+      const refill = refillCustomerBatch(state, nowMs + 100);
+
+      assertEqual(refill.refilled, true, 'manual refill succeeds');
+      assertEqual(state.activeCustomers.length, customerQueueCapacity, 'manual refill creates three slots');
+      assertEqual(
+        state.activeCustomers.every((customer) => customer.status === 'waiting'),
+        true,
+        'manual refill creates waiting customers',
+      );
+      assertEqual(state.nextCustomerArrivesAtMs, nowMs + 100 + customerArrivalIntervalMs, 'manual refill schedules next timed arrival');
     },
   },
   {

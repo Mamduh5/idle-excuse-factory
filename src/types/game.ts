@@ -78,6 +78,8 @@ export type GameState = {
   activeCrafts: ActiveCraftState;
   activeCustomers: CustomerInstance[];
   customerBatchNumber: number;
+  customerArrivalIndex: number;
+  nextCustomerArrivesAtMs: number;
   upgrades: UpgradeState;
   unlockedZoneIds: ZoneDefinition['id'][];
   lastUpdatedAtMs: number;

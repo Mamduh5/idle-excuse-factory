@@ -3,7 +3,7 @@ import { starterExcuseIds } from '../data/excuses';
 import { upgrades } from '../data/upgrades';
 import { zones } from '../data/zones';
 import { createInitialState } from '../state/initialState';
-import { getCustomerPatienceMs } from '../systems/gameplay';
+import { customerArrivalIntervalMs, customerQueueCapacity, getCustomerPatienceMs } from '../systems/gameplay';
 import { getExcuseStockCapForLevel, stockCapUpgradeId } from '../systems/upgrades';
 import type {
   ActiveCraftState,
@@ -123,6 +123,8 @@ export function normalizeGameState(rawState: unknown, nowMs: number, fallbackUpd
     activeCrafts: normalizeActiveCrafts(rawState.activeCrafts, normalizedStock, normalizedUpgrades, nowMs),
     activeCustomers: normalizeCustomers(rawState.activeCustomers, nowMs, initial.activeCustomers),
     customerBatchNumber: sanitizeCount(rawState.customerBatchNumber),
+    customerArrivalIndex: sanitizeCount(rawState.customerArrivalIndex),
+    nextCustomerArrivesAtMs: normalizeNextCustomerArrivalAtMs(rawState.nextCustomerArrivesAtMs, nowMs),
     upgrades: normalizedUpgrades,
     unlockedZoneIds,
     lastUpdatedAtMs: sanitizeTimestamp(rawState.lastUpdatedAtMs, fallbackUpdatedAtMs),
@@ -199,7 +201,7 @@ function normalizeCustomers(value: unknown, nowMs: number, fallback: CustomerIns
   const normalized = value
     .map((customer, index) => normalizeCustomer(customer, index, nowMs))
     .filter((customer): customer is CustomerInstance => customer !== undefined)
-    .slice(0, 3);
+    .slice(0, customerQueueCapacity);
 
   if (normalized.length === 0) {
     return fallback;
@@ -211,7 +213,7 @@ function normalizeCustomers(value: unknown, nowMs: number, fallback: CustomerIns
 function fillCustomerSlots(normalized: CustomerInstance[], fallback: CustomerInstance[], nowMs: number): CustomerInstance[] {
   const filled = [...normalized];
 
-  while (filled.length < 3) {
+  while (filled.length < customerQueueCapacity) {
     const fallbackCustomer = fallback.find((customer) => {
       return !filled.some((filledCustomer) => filledCustomer.customerId === customer.customerId);
     }) ?? fallback[filled.length] ?? fallback[0];
@@ -305,6 +307,19 @@ function normalizeUnlockedZoneIds(value: unknown): string[] {
     ? value.filter((id): id is string => typeof id === 'string' && zoneIds.has(id))
     : [];
   return [...new Set([...defaultZoneIds, ...fromSave])];
+}
+
+function normalizeNextCustomerArrivalAtMs(value: unknown, nowMs: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return nowMs + customerArrivalIntervalMs;
+  }
+
+  const timestamp = Math.floor(value);
+  if (timestamp <= nowMs) {
+    return nowMs;
+  }
+
+  return Math.min(timestamp, nowMs + customerArrivalIntervalMs);
 }
 
 function sanitizeCount(value: unknown): number {

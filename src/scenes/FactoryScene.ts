@@ -8,13 +8,16 @@ import { devSaveSeedDefinitions, writeDevSaveSeed, type DevSaveSeedDefinition } 
 import { clearSavedGame, loadGameState, saveGameState, type LoadSaveResult } from '../services';
 import { createInitialState } from '../state/initialState';
 import {
+  addTimedCustomerArrival,
   canRefillCustomerBatch,
   completeCrafts,
   craftExcuse,
   expireCustomerPatience,
+  getNextCustomerArrivalRemainingMs,
   getCustomerPatienceRemainingMs,
   getWaitingCustomerByInstanceId,
   getWantedExcuseIds,
+  hasCustomerArrivalRoom,
   hasMatchingStock,
   refillCustomerBatch,
   serveCustomerByInstanceId,
@@ -96,10 +99,12 @@ export class FactoryScene extends Phaser.Scene {
     }
 
     this.lastPatienceRenderSecond = currentSecond;
+    const arrivalResult = addTimedCustomerArrival(this.state, nowMs);
     const craftResult = completeCrafts(this.state, nowMs);
     const hasActiveCrafts = this.hasActiveCrafts();
     const hasWaitingCustomers = this.state.activeCustomers.some((customer) => customer.status === 'waiting');
-    if (!hasWaitingCustomers && !hasActiveCrafts && craftResult.completed.length === 0) {
+    const hasArrivalRoom = hasCustomerArrivalRoom(this.state);
+    if (!hasWaitingCustomers && !hasActiveCrafts && craftResult.completed.length === 0 && !arrivalResult.arrived && !hasArrivalRoom) {
       return;
     }
 
@@ -115,7 +120,7 @@ export class FactoryScene extends Phaser.Scene {
       this.scheduleStockFlash(grantedCraft.excuseId, 'craft');
     }
 
-    if (result.expiredInstanceIds.length > 0 || craftResult.completed.length > 0) {
+    if (result.expiredInstanceIds.length > 0 || craftResult.completed.length > 0 || arrivalResult.arrived) {
       this.saveProgress();
     }
 
@@ -124,6 +129,11 @@ export class FactoryScene extends Phaser.Scene {
       this.showToast(`ผลิต ${excuses[grantedCraft.excuseId].displayName} แล้ว ${grantedCraft.stock}/${grantedCraft.cap}`);
     } else if (result.expiredInstanceIds.length > 0) {
       this.showToast('ลูกค้ารอไม่ไหวแล้ว...');
+    } else if (arrivalResult.arrived) {
+      const customerName = arrivalResult.customer
+        ? this.customersById.get(arrivalResult.customer.customerId)?.displayName
+        : undefined;
+      this.showToast(customerName ? `${customerName} เข้าคิวแล้ว` : 'ลูกค้าเข้าคิวแล้ว');
     }
   }
 
@@ -216,9 +226,11 @@ export class FactoryScene extends Phaser.Scene {
       '#2b2018',
       headerWidth,
     );
+    const nowMs = Date.now();
+    const arrivalHint = this.getCustomerArrivalHintText(nowMs);
     const serveStatus = addLabel(
       this,
-      this.getServeStatusText(),
+      arrivalHint ? `${this.getServeStatusText()} · ${arrivalHint}` : this.getServeStatusText(),
       inner.x,
       inner.y + (layout.compact ? 17 : 21),
       layout.compact ? 8 : 10,
@@ -238,7 +250,6 @@ export class FactoryScene extends Phaser.Scene {
     const slotGap = layout.compact ? 4 : 7;
     const slotTop = inner.y + (layout.compact ? 34 : 39);
     const slotHeight = Math.max(layout.compact ? 40 : 48, Math.floor((inner.height - (slotTop - inner.y) - slotGap * 2) / 3));
-    const nowMs = Date.now();
     const queueCleared = this.isQueueCleared(nowMs);
     const slots = this.state.activeCustomers.slice(0, 3).flatMap((customer, index) => {
       const y = slotTop + index * (slotHeight + slotGap);
@@ -1485,6 +1496,19 @@ export class FactoryScene extends Phaser.Scene {
     }
 
     return hasMatchingStock(this.state, selected) ? 'พร้อมเสิร์ฟ' : 'ต้องผลิตก่อน';
+  }
+
+  private getCustomerArrivalHintText(nowMs: number): string | undefined {
+    if (!hasCustomerArrivalRoom(this.state)) {
+      return undefined;
+    }
+
+    const remainingMs = getNextCustomerArrivalRemainingMs(this.state, nowMs);
+    if (remainingMs <= 0) {
+      return 'ลูกค้าคนต่อไป: soon';
+    }
+
+    return `ลูกค้าคนต่อไป: ${Math.ceil(remainingMs / 1000)}s`;
   }
 
   private addCueBorder(rect: Rect, ready: boolean): Phaser.GameObjects.Graphics {

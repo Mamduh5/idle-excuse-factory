@@ -1,6 +1,6 @@
 import { customers } from '../data/customers';
 import { starterExcuseIds } from '../data/excuses';
-import { getCustomerPatienceMs } from '../systems/gameplay';
+import { customerArrivalIntervalMs, getCustomerPatienceMs } from '../systems/gameplay';
 import type { ExcuseStock, GameState } from '../types/game';
 
 const starterStock = starterExcuseIds.reduce<ExcuseStock>((stock, id) => {
@@ -46,6 +46,8 @@ export function createInitialState(nowMs = Date.now()): GameState {
       },
     ],
     customerBatchNumber: 0,
+    customerArrivalIndex: 0,
+    nextCustomerArrivesAtMs: nowMs + customerArrivalIntervalMs,
     upgrades: {},
     unlockedZoneIds: ['daily_life'],
     lastUpdatedAtMs: nowMs,
