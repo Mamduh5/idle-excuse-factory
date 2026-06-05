@@ -130,7 +130,11 @@ export class FactoryScene extends Phaser.Scene {
 
     const background = this.add.graphics()
       .fillStyle(colors.background, 1)
-      .fillRect(0, 0, width, height);
+      .fillRect(0, 0, width, height)
+      .fillStyle(colors.backgroundBand, 0.45)
+      .fillRect(0, 0, width, Math.round(height * 0.22))
+      .fillStyle(colors.greenPanel, 0.28)
+      .fillRect(0, Math.round(height * 0.68), width, Math.round(height * 0.32));
     this.uiGroup.add(background);
 
     this.renderHud(layout);
@@ -190,41 +194,40 @@ export class FactoryScene extends Phaser.Scene {
 
   private renderCustomerQueue(layout: FactoryLayout): void {
     const panel = addPanel(this, layout.customerQueue, colors.panelAlt, 14);
-    const inner = inset(layout.customerQueue, layout.compact ? 8 : 11);
-    const serveButtonWidth = layout.compact ? 72 : 118;
-    const statusX = inner.x + (layout.compact ? 86 : 126);
-    const statusWidth = inner.width - serveButtonWidth - (statusX - inner.x) - 8;
+    const inner = inset(layout.customerQueue, layout.compact ? 7 : 11);
+    const serveButtonWidth = layout.compact ? 76 : 116;
+    const headerWidth = inner.width - serveButtonWidth - 10;
     const heading = addLabel(
       this,
       'Customer Queue',
       inner.x,
       inner.y,
-      layout.compact ? 14 : 16,
+      layout.compact ? 13 : 16,
       '#2b2018',
-      inner.width - serveButtonWidth - 8,
+      headerWidth,
     );
     const serveStatus = addLabel(
       this,
       this.getServeStatusText(),
-      statusX,
-      inner.y + (layout.compact ? 4 : 5),
-      layout.compact ? 9 : 10,
+      inner.x,
+      inner.y + (layout.compact ? 17 : 21),
+      layout.compact ? 8 : 10,
       this.getSelectedCustomer() ? '#2b2018' : '#74594c',
-      statusWidth,
+      headerWidth,
     );
     serveStatus.setFontStyle('700');
     const serveAction = this.renderServeAction(
       {
         x: inner.x + inner.width - serveButtonWidth,
-        y: inner.y - 1,
+        y: inner.y,
         width: serveButtonWidth,
-        height: layout.compact ? 21 : 25,
+        height: layout.compact ? 27 : 30,
       },
       layout.compact,
     );
-    const slotGap = layout.compact ? 5 : 7;
-    const slotTop = inner.y + (layout.compact ? 22 : 29);
-    const slotHeight = Math.max(34, Math.floor((inner.height - (slotTop - inner.y) - slotGap * 2) / 3));
+    const slotGap = layout.compact ? 4 : 7;
+    const slotTop = inner.y + (layout.compact ? 34 : 39);
+    const slotHeight = Math.max(layout.compact ? 40 : 48, Math.floor((inner.height - (slotTop - inner.y) - slotGap * 2) / 3));
     const nowMs = Date.now();
     const queueCleared = this.isQueueCleared(nowMs);
     const slots = this.state.activeCustomers.slice(0, 3).flatMap((customer, index) => {
@@ -245,8 +248,8 @@ export class FactoryScene extends Phaser.Scene {
   private renderServeAction(rect: Rect, compact: boolean): Phaser.GameObjects.GameObject[] {
     if (!this.selectedCustomerInstanceId) {
       const disabled = addPanel(this, rect, colors.panelEmpty, 10);
-      const hint = addLabel(this, compact ? 'เลือกก่อน' : 'เลือกก่อน', rect.x + rect.width / 2, rect.y + rect.height / 2 - 7, compact ? 9 : 10, '#74594c');
-      hint.setOrigin(0.5, 0);
+      const hint = addLabel(this, 'เลือก', rect.x + 8, rect.y + rect.height / 2 - (compact ? 6 : 7), compact ? 9 : 10, '#74594c', rect.width - 16);
+      hint.setAlign('center');
       return [disabled, hint];
     }
 
@@ -288,13 +291,13 @@ export class FactoryScene extends Phaser.Scene {
       const consumedExcuse = customer.servedReward?.consumedExcuseId
         ? excuses[customer.servedReward.consumedExcuseId].displayName
         : '-';
-      const sold = addLabel(this, 'ขายสำเร็จ!', rect.x + 10, rect.y + 5, compact ? 11 : 13, '#2b2018', rect.width * 0.42);
+      const sold = addLabel(this, 'ขายสำเร็จ!', rect.x + 10, rect.y + (compact ? 5 : 7), compact ? 10 : 13, '#2b2018', rect.width * 0.42);
       const coins = addLabel(
         this,
         `+${customer.servedReward?.coins ?? 0} coins`,
         rect.x + rect.width * 0.52,
-        rect.y + 5,
-        compact ? 10 : 12,
+        rect.y + (compact ? 5 : 7),
+        compact ? 9 : 12,
         '#2b2018',
         rect.width * 0.42,
       );
@@ -302,7 +305,7 @@ export class FactoryScene extends Phaser.Scene {
         this,
         `ใช้ข้ออ้าง: ${consumedExcuse}`,
         rect.x + 10,
-        rect.y + rect.height / 2 - (compact ? 6 : 8),
+        rect.y + rect.height / 2 - (compact ? 5 : 8),
         compact ? 8 : 10,
         '#2b2018',
         rect.width - 20,
@@ -311,7 +314,7 @@ export class FactoryScene extends Phaser.Scene {
         this,
         `+${customer.servedReward?.smoothness ?? 0} ความเนียน`,
         rect.x + 10,
-        rect.y + rect.height - (compact ? 14 : 18),
+        rect.y + rect.height - (compact ? 13 : 18),
         compact ? 8 : 10,
         '#74594c',
         rect.width - 20,
@@ -339,13 +342,13 @@ export class FactoryScene extends Phaser.Scene {
     }
 
     if (definition && left) {
-      const leftTitle = addLabel(this, 'ลูกค้ารอไม่ไหวแล้ว...', rect.x + 10, rect.y + (compact ? 7 : 8), compact ? 11 : 13, '#2b2018', rect.width - 20);
+      const leftTitle = addLabel(this, 'ลูกค้ารอไม่ไหวแล้ว...', rect.x + 10, rect.y + (compact ? 6 : 8), compact ? 10 : 13, '#2b2018', rect.width - 20);
       const leftText = addLabel(
         this,
         'เดินหนีไปแล้ว · ไม่มีค่าปรับ',
         rect.x + 10,
-        rect.y + rect.height - (compact ? 17 : 20),
-        compact ? 9 : 11,
+        rect.y + rect.height - (compact ? 15 : 20),
+        compact ? 8 : 11,
         '#74594c',
         rect.width - 20,
       );
@@ -373,48 +376,49 @@ export class FactoryScene extends Phaser.Scene {
     const patienceRemainingMs = getCustomerPatienceRemainingMs(customer, nowMs);
     const patienceSeconds = Math.ceil(patienceRemainingMs / 1000);
     const lowPatience = patienceRemainingMs <= 10_000;
-    const name = addLabel(this, title, rect.x + 10, rect.y + 6, compact ? 11 : 13, '#2b2018', rect.width * 0.58);
-    const want = addLabel(
-      this,
-      selected ? 'เลือกแล้ว' : `ต้องการ: ${wanted}`,
-      rect.x + rect.width * 0.56,
-      rect.y + 6,
-      compact ? 10 : 12,
-      selected ? '#d97706' : '#74594c',
-      rect.width * 0.42,
-    );
-    want.setFontStyle('700');
-    const status = addLabel(
-      this,
-      selected ? `ต้องการ: ${wanted}` : this.getCustomerStatus(definition),
-      rect.x + 10,
-      rect.y + rect.height - (compact ? 27 : 32),
-      compact ? 9 : 11,
-      selected ? '#2b2018' : '#74594c',
-      rect.width - 20,
-    );
+    const padX = compact ? 8 : 10;
+    const name = addLabel(this, title, rect.x + padX, rect.y + (compact ? 5 : 7), compact ? 10 : 13, '#2b2018', rect.width - (compact ? 86 : 108));
     const patience = addLabel(
       this,
-      `รอได้อีก ${patienceSeconds}s`,
-      rect.x + 10,
-      rect.y + rect.height - (compact ? 14 : 17),
-      compact ? 8 : 9,
+      `${patienceSeconds}s`,
+      rect.x + rect.width - (compact ? 54 : 66),
+      rect.y + (compact ? 5 : 8),
+      compact ? 9 : 11,
       lowPatience ? '#d97706' : '#2f7d32',
-      rect.width - 20,
+      compact ? 46 : 58,
     );
-    status.setFontStyle(selected ? '800' : '500');
     patience.setFontStyle('900');
+    const status = addLabel(
+      this,
+      this.getCustomerStatus(definition),
+      rect.x + padX,
+      rect.y + (compact ? 18 : 25),
+      compact ? 7 : 9,
+      selected ? '#2b2018' : '#74594c',
+      rect.width - padX * 2,
+    );
+    const want = addLabel(
+      this,
+      selected ? `เลือกแล้ว · ต้องการ: ${wanted}` : `ต้องการ: ${wanted}`,
+      rect.x + padX,
+      rect.y + rect.height - (compact ? 12 : 15),
+      compact ? 7 : 8,
+      selected ? '#d97706' : '#2b2018',
+      rect.width - padX * 2,
+    );
+    want.setFontStyle(selected ? '900' : '800');
+    status.setFontStyle(selected ? '800' : '500');
     const hitArea = this.add.zone(rect.x, rect.y, rect.width, rect.height)
       .setOrigin(0)
       .setInteractive({ useHandCursor: true });
     hitArea.on('pointerup', () => this.selectCustomer(customer.instanceId));
 
-    return [bg, ...(selectedBorder ? [selectedBorder] : []), name, want, status, patience, hitArea];
+    return [bg, ...(selectedBorder ? [selectedBorder] : []), name, patience, status, want, hitArea];
   }
 
   private addSelectedBorder(rect: Rect): Phaser.GameObjects.Graphics {
     return this.add.graphics()
-      .lineStyle(4, colors.accentPressed, 1)
+      .lineStyle(2, colors.accentPressed, 1)
       .strokeRoundedRect(rect.x + 2, rect.y + 2, rect.width - 4, rect.height - 4, 10);
   }
 
@@ -452,11 +456,11 @@ export class FactoryScene extends Phaser.Scene {
 
   private renderExcuseCounter(layout: FactoryLayout): void {
     const panel = addPanel(this, layout.excuseCounter, colors.greenPanel, 14);
-    const inner = inset(layout.excuseCounter, layout.compact ? 8 : 11);
-    const heading = addLabel(this, 'Excuse Counter', inner.x, inner.y, layout.compact ? 14 : 16, '#2b2018');
-    const cardGap = layout.compact ? 5 : 7;
-    const cardTop = inner.y + (layout.compact ? 22 : 29);
-    const cardHeight = Math.max(30, Math.floor((inner.height - (cardTop - inner.y) - cardGap * 2) / 3));
+    const inner = inset(layout.excuseCounter, layout.compact ? 7 : 11);
+    const heading = addLabel(this, 'Excuse Counter', inner.x, inner.y, layout.compact ? 13 : 16, '#2b2018');
+    const cardGap = layout.compact ? 4 : 7;
+    const cardTop = inner.y + (layout.compact ? 20 : 29);
+    const cardHeight = Math.max(layout.compact ? 26 : 32, Math.floor((inner.height - (cardTop - inner.y) - cardGap * 2) / 3));
     const cards = starterExcuseIds.flatMap((id, index) => {
       const y = cardTop + index * (cardHeight + cardGap);
       return this.renderExcuseCard(
@@ -477,13 +481,34 @@ export class FactoryScene extends Phaser.Scene {
     const flashing = this.stockFlashExcuseId === excuseId;
     const bg = addPanel(this, rect, ready ? colors.panelServed : selectedWants ? colors.panelNeeded : colors.panel, 10);
     const border = selectedWants ? this.addCueBorder(rect, ready) : undefined;
-    const label = excuses[excuseId].displayName;
+    const label = compact ? excuses[excuseId].shortLabel : excuses[excuseId].displayName;
     const countPrefix = selectedWants ? ready ? 'พร้อม' : 'ต้องใช้' : 'Stock';
-    const title = addLabel(this, label, rect.x + 10, rect.y + (compact ? 6 : 7), compact ? 11 : 13, '#2b2018', rect.width * 0.55);
-    const count = addLabel(this, `${countPrefix} ${stock}/${maxStock}`, rect.x + rect.width * 0.58, rect.y + (compact ? 6 : 7), compact ? 10 : 12, selectedWants ? '#2b2018' : '#74594c', rect.width * 0.39);
+    const badgeWidth = compact ? 72 : 92;
+    const title = addLabel(this, label, rect.x + 10, rect.y + (compact ? 5 : 8), compact ? 10 : 13, '#2b2018', rect.width - badgeWidth - 22);
+    const countBadge = addPanel(
+      this,
+      {
+        x: rect.x + rect.width - badgeWidth - 8,
+        y: rect.y + (compact ? 4 : 6),
+        width: badgeWidth,
+        height: rect.height - (compact ? 8 : 12),
+      },
+      selectedWants ? colors.panel : colors.panelEmpty,
+      9,
+      { shadow: false },
+    );
+    const count = addLabel(
+      this,
+      compact ? `${stock}/${maxStock}` : `${countPrefix} ${stock}/${maxStock}`,
+      rect.x + rect.width - badgeWidth - 2,
+      rect.y + rect.height / 2 - (compact ? 7 : 8),
+      compact ? 10 : 11,
+      selectedWants ? '#2b2018' : '#74594c',
+      badgeWidth - 12,
+    );
     count.setFontStyle('700');
     const flashObjects = flashing ? this.renderStockFlash(rect, compact, this.stockFlashKind ?? 'consume') : [];
-    return [bg, ...(border ? [border] : []), title, count, ...flashObjects];
+    return [bg, ...(border ? [border] : []), title, countBadge, count, ...flashObjects];
   }
 
   private renderStockFlash(rect: Rect, compact: boolean, kind: StockFlashKind): Phaser.GameObjects.GameObject[] {
@@ -521,19 +546,20 @@ export class FactoryScene extends Phaser.Scene {
 
   private renderCraftPanel(layout: FactoryLayout): void {
     const panel = addPanel(this, layout.craftPanel, colors.craftPanel, 14);
-    const inner = inset(layout.craftPanel, layout.compact ? 8 : 11);
-    const heading = addLabel(this, 'Craft Panel', inner.x, inner.y, layout.compact ? 14 : 16, '#2b2018');
-    const buttonGap = layout.compact ? 5 : 7;
-    const buttonTop = inner.y + (layout.compact ? 22 : 30);
-    const buttonHeight = Math.max(33, Math.min(44, Math.floor((inner.height - (buttonTop - inner.y) - buttonGap * 2) / 3)));
+    const inner = inset(layout.craftPanel, layout.compact ? 6 : 11);
+    const heading = addLabel(this, 'Craft Panel', inner.x, inner.y, layout.compact ? 13 : 16, '#2b2018');
+    const buttonGap = layout.compact ? 4 : 7;
+    const buttonTop = inner.y + (layout.compact ? 19 : 30);
+    const buttonHeight = Math.max(layout.compact ? 30 : 36, Math.min(layout.compact ? 38 : 44, Math.floor((inner.height - (buttonTop - inner.y) - buttonGap * 2) / 3)));
     const selectedCustomer = this.getSelectedCustomer();
     const missingAllAcceptedStock = selectedCustomer !== undefined && !hasMatchingStock(this.state, selectedCustomer);
     const buttons = starterExcuseIds.map((id, index) => {
       const selectedWants = this.selectedCustomerWants(id);
       const stockMissing = selectedWants && missingAllAcceptedStock;
+      const excuseLabel = layout.compact ? excuses[id].shortLabel : excuses[id].displayName;
       const label = stockMissing
-        ? `ผลิต ${excuses[id].displayName} · ควรผลิต`
-        : `ผลิต ${excuses[id].displayName}`;
+        ? `ผลิต ${excuseLabel} · ควรผลิต`
+        : `ผลิต ${excuseLabel}`;
       const y = buttonTop + index * (buttonHeight + buttonGap);
       return addButton(
         this,
@@ -541,7 +567,7 @@ export class FactoryScene extends Phaser.Scene {
         label,
         () => this.handleCraft(id),
         {
-          fontSize: stockMissing ? layout.compact ? 10 : 12 : layout.compact ? 12 : 14,
+          fontSize: stockMissing ? layout.compact ? 10 : 12 : layout.compact ? 11 : 14,
           fillColor: stockMissing ? colors.panelNeeded : undefined,
           pressedColor: stockMissing ? colors.accent : undefined,
         },
@@ -553,7 +579,7 @@ export class FactoryScene extends Phaser.Scene {
 
   private renderFooter(layout: FactoryLayout): void {
     const panel = addPanel(this, layout.footer, colors.footer, 14);
-    const inner = inset(layout.footer, layout.compact ? 6 : 8);
+    const inner = inset(layout.footer, layout.compact ? 5 : 7);
     const labels = ['Upgrades', 'Zones', 'Archive', 'Settings'];
     const gap = 6;
     const width = (inner.width - gap * (labels.length - 1)) / labels.length;
@@ -587,7 +613,7 @@ export class FactoryScene extends Phaser.Scene {
         onPress,
         {
           fontSize: layout.compact ? 10 : 11,
-          fillColor: 0xffdd75,
+          fillColor: colors.footerButton,
           pressedColor: colors.accent,
         },
       );
@@ -764,20 +790,20 @@ export class FactoryScene extends Phaser.Scene {
     this.modalPanel = modal;
 
     const rows = ['Sound: On', 'Music: On', 'Save: Auto'];
-    const rowGap = showDevQa ? compact ? 5 : 6 : compact ? 8 : 10;
-    const rowHeight = showDevQa ? compact ? 28 : 32 : compact ? 38 : 44;
+    const rowGap = showDevQa ? compact ? 4 : 6 : compact ? 8 : 10;
+    const rowHeight = showDevQa ? compact ? 27 : 32 : compact ? 38 : 44;
     const rowX = modal.contentRect.x;
     const rowWidth = modal.contentRect.width;
     const rowStartY = modal.contentRect.y;
     const rowObjects = rows.flatMap((row, index) => {
       const y = rowStartY + index * (rowHeight + rowGap);
-      const rowPanel = addPanel(this, { x: rowX, y, width: rowWidth, height: rowHeight }, colors.panelAlt, 12);
+      const rowPanel = addPanel(this, { x: rowX, y, width: rowWidth, height: rowHeight }, colors.panel, 12);
       const rowLabel = addLabel(this, row, rowX + 14, y + rowHeight / 2 - (showDevQa ? 6 : 8), showDevQa ? compact ? 9 : 11 : compact ? 12 : 14, '#2b2018', rowWidth - 28);
       rowLabel.setFontStyle('700');
       return [rowPanel, rowLabel];
     });
     const resetY = rowStartY + rows.length * (rowHeight + rowGap);
-    const resetHeight = showDevQa ? compact ? 40 : 44 : compact ? 54 : 60;
+    const resetHeight = showDevQa ? compact ? 38 : 44 : compact ? 54 : 60;
     const resetPanel = addPanel(
       this,
       { x: rowX, y: resetY, width: rowWidth, height: resetHeight },
@@ -809,13 +835,15 @@ export class FactoryScene extends Phaser.Scene {
     resetTitle.setFontStyle('800');
     resetHelp.setFontStyle('700');
 
+    const noteY = modal.panelRect.y + modal.panelRect.height - (compact ? 34 : 40);
+    const devTopY = resetY + resetHeight + rowGap;
     const devObjects = showDevQa
       ? this.renderDevQaSeedControls(
         {
           x: rowX,
-          y: resetY + resetHeight + rowGap,
+          y: devTopY,
           width: rowWidth,
-          height: modal.panelRect.y + modal.panelRect.height - (resetY + resetHeight + rowGap) - (compact ? 20 : 24),
+          height: Math.max(0, noteY - devTopY - (compact ? 8 : 10)),
         },
         compact,
       )
@@ -824,7 +852,7 @@ export class FactoryScene extends Phaser.Scene {
       this,
       showDevQa ? 'Dev only: writes save and reloads scene' : 'Placeholder only',
       rowX,
-      modal.panelRect.y + modal.panelRect.height - (compact ? 34 : 40),
+      noteY,
       showDevQa ? compact ? 7 : 8 : compact ? 10 : 11,
       '#74594c',
       rowWidth,
@@ -880,8 +908,8 @@ export class FactoryScene extends Phaser.Scene {
     this.modalPanel = modal;
 
     const visibleUpgrades = upgrades;
-    const rowGap = compact ? 5 : 7;
-    const rowHeight = compact ? 50 : 57;
+    const rowGap = compact ? 6 : 8;
+    const rowHeight = compact ? 52 : 58;
     const rowX = modal.contentRect.x;
     const rowWidth = modal.contentRect.width;
     const rowStartY = modal.contentRect.y;
@@ -893,7 +921,7 @@ export class FactoryScene extends Phaser.Scene {
       const maxed = level >= upgrade.maxLevel;
       const costValue = calculateUpgradeCost(upgrade, level);
       const affordable = this.state.currencies.coins >= costValue;
-      const rowPanel = addPanel(this, { x: rowX, y, width: rowWidth, height: rowHeight }, colors.panelAlt, 12);
+      const rowPanel = addPanel(this, { x: rowX, y, width: rowWidth, height: rowHeight }, colors.panel, 12);
       const name = addLabel(this, upgrade.displayName, rowX + 10, y + (compact ? 5 : 6), compact ? 10 : 12, '#2b2018', contentWidth);
       const description = addLabel(
         this,
@@ -996,8 +1024,8 @@ export class FactoryScene extends Phaser.Scene {
     this.modalPanel = modal;
 
     const visibleZones = zones.slice(0, 3);
-    const rowGap = compact ? 8 : 10;
-    const rowHeight = compact ? 76 : 86;
+    const rowGap = compact ? 8 : 11;
+    const rowHeight = compact ? 78 : 88;
     const rowX = modal.contentRect.x;
     const rowWidth = modal.contentRect.width;
     const rowStartY = modal.contentRect.y;
@@ -1009,7 +1037,7 @@ export class FactoryScene extends Phaser.Scene {
       const unlocked = zone.unlockedByDefault || this.state.unlockedZoneIds.includes(zone.id);
       const status = current ? 'Current' : unlocked ? 'Unlocked' : 'Locked';
       const actionLabel = current ? 'Current' : compact ? 'Soon' : 'ยังไม่เปิด';
-      const rowPanel = addPanel(this, { x: rowX, y, width: rowWidth, height: rowHeight }, current ? colors.panelServed : colors.panelAlt, 12);
+      const rowPanel = addPanel(this, { x: rowX, y, width: rowWidth, height: rowHeight }, current ? colors.panelServed : colors.panel, 12);
       const name = addLabel(this, zone.displayName, rowX + 12, y + 8, compact ? 12 : 14, '#2b2018', contentWidth);
       const description = addLabel(this, zone.description, rowX + 12, y + (compact ? 29 : 32), compact ? 8 : 10, '#74594c', contentWidth);
       const requirement = addLabel(
@@ -1084,7 +1112,7 @@ export class FactoryScene extends Phaser.Scene {
     const rowWidth = modal.contentRect.width;
     const topY = modal.contentRect.y;
     const progressHeight = compact ? 44 : 50;
-    const progressPanel = addPanel(this, { x: rowX, y: topY, width: rowWidth, height: progressHeight }, colors.panelAlt, 12);
+    const progressPanel = addPanel(this, { x: rowX, y: topY, width: rowWidth, height: progressHeight }, colors.panel, 12);
     const excuseProgress = addLabel(
       this,
       `Excuses discovered: ${starterExcuseIds.length} / ?`,

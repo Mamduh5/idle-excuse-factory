@@ -7,15 +7,29 @@ export type ButtonHandle = {
   setPressed: (pressed: boolean) => void;
 };
 
+type PanelOptions = {
+  borderColor?: number;
+  borderWidth?: number;
+  shadow?: boolean;
+};
+
 export function addPanel(
   scene: Phaser.Scene,
   rect: Rect,
   fillColor = colors.panel,
   radius = 14,
+  options: PanelOptions = {},
 ): Phaser.GameObjects.Graphics {
-  return scene.add.graphics()
+  const graphics = scene.add.graphics();
+  if (options.shadow !== false) {
+    graphics
+      .fillStyle(colors.shadow, 0.12)
+      .fillRoundedRect(rect.x + 2, rect.y + 3, rect.width, rect.height, radius);
+  }
+
+  return graphics
     .fillStyle(fillColor, 1)
-    .lineStyle(2, colors.border, 1)
+    .lineStyle(options.borderWidth ?? 1, options.borderColor ?? colors.borderSoft, 1)
     .fillRoundedRect(rect.x, rect.y, rect.width, rect.height, radius)
     .strokeRoundedRect(rect.x, rect.y, rect.width, rect.height, radius);
 }
@@ -44,7 +58,7 @@ export function addButton(
   rect: Rect,
   label: string,
   onPress: () => void,
-  options: { fontSize?: number; fillColor?: number; pressedColor?: number } = {},
+  options: { fontSize?: number; fillColor?: number; pressedColor?: number; textColor?: string } = {},
 ): ButtonHandle {
   const fillColor = options.fillColor ?? colors.accent;
   const pressedColor = options.pressedColor ?? colors.accentPressed;
@@ -52,8 +66,10 @@ export function addButton(
   const shape = scene.add.graphics();
   const draw = (pressed: boolean): void => {
     shape.clear()
+      .fillStyle(colors.shadow, pressed ? 0.08 : 0.14)
+      .fillRoundedRect(rect.x + 2, rect.y + (pressed ? 2 : 3), rect.width, rect.height, 12)
       .fillStyle(pressed ? pressedColor : fillColor, 1)
-      .lineStyle(2, colors.border, 1)
+      .lineStyle(1, colors.border, 1)
       .fillRoundedRect(rect.x, rect.y, rect.width, rect.height, 12)
       .strokeRoundedRect(rect.x, rect.y, rect.width, rect.height, 12);
   };
@@ -65,9 +81,12 @@ export function addButton(
   const text = scene.add.text(rect.x + rect.width / 2, rect.y + rect.height / 2, label, {
     fontFamily: 'system-ui, "Noto Sans Thai", Tahoma, sans-serif',
     fontSize: `${options.fontSize ?? 15}px`,
-    color: '#2b2018',
+    color: options.textColor ?? '#2b2018',
     fontStyle: '800',
     align: 'center',
+    fixedWidth: Math.max(12, rect.width - 12),
+    lineSpacing: -2,
+    wordWrap: { width: Math.max(12, rect.width - 14), useAdvancedWrap: true },
   }).setOrigin(0.5);
 
   hitArea.on('pointerdown', () => draw(true));

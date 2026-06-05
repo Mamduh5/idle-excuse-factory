@@ -33,7 +33,7 @@ export function createModalPanel(scene: Phaser.Scene, options: ModalPanelOptions
 
   const dim = scene.add.graphics()
     .setDepth(depth)
-    .fillStyle(0x2b2018, 0.36)
+    .fillStyle(0x2b2018, 0.28)
     .fillRect(0, 0, width, height);
   const inputBlocker = scene.add.zone(0, 0, width, height)
     .setOrigin(0)
@@ -44,34 +44,34 @@ export function createModalPanel(scene: Phaser.Scene, options: ModalPanelOptions
   });
   group.addMultiple([dim, inputBlocker]);
 
-  const margin = Math.max(16, Math.min(28, Math.round(width * 0.06)));
-  const panelWidth = Math.min(width - margin * 2, 334);
-  const panelHeight = Math.min(height - margin * 2, compact ? 338 : 386);
+  const margin = Math.max(14, Math.min(26, Math.round(width * 0.055)));
+  const panelWidth = Math.min(width - margin * 2, 344);
+  const panelHeight = Math.min(height - margin * 2, compact ? 356 : 408);
   const panelRect: Rect = {
     x: (width - panelWidth) / 2,
     y: (height - panelHeight) / 2,
     width: panelWidth,
     height: panelHeight,
   };
-  const headerHeight = compact ? 56 : 66;
+  const headerHeight = compact ? 54 : 64;
   const contentRect: Rect = {
     x: panelRect.x + 18,
-    y: panelRect.y + headerHeight + (compact ? 18 : 24),
+    y: panelRect.y + headerHeight + (compact ? 14 : 20),
     width: panelRect.width - 36,
-    height: panelRect.height - headerHeight - (compact ? 52 : 64),
+    height: panelRect.height - headerHeight - (compact ? 44 : 58),
   };
 
-  const panel = addPanel(scene, panelRect, colors.panel, 18);
+  const panel = addPanel(scene, panelRect, colors.panel, 18, { borderColor: colors.border, borderWidth: 1 });
   const header = scene.add.graphics()
     .fillStyle(colors.hud, 1)
     .fillRoundedRect(panelRect.x, panelRect.y, panelRect.width, headerHeight, 18)
     .fillRect(panelRect.x, panelRect.y + headerHeight - 18, panelRect.width, 18);
-  const title = addLabel(scene, options.title, panelRect.x + 18, panelRect.y + 18, compact ? 18 : 21, '#fff7e6');
+  const title = addLabel(scene, options.title, panelRect.x + 18, panelRect.y + (compact ? 14 : 17), compact ? 18 : 21, '#fff7e6', panelRect.width - 82);
   const subtitle = options.subtitle
-    ? addLabel(scene, options.subtitle, panelRect.x + 18, panelRect.y + (compact ? 39 : 45), compact ? 10 : 11, '#fff7e6')
+    ? addLabel(scene, options.subtitle, panelRect.x + 18, panelRect.y + (compact ? 36 : 44), compact ? 10 : 11, '#fff7e6', panelRect.width - 92)
     : undefined;
 
-  const closeSize = compact ? 34 : 38;
+  const closeSize = compact ? 32 : 36;
   const closeButton = addButton(
     scene,
     {
@@ -84,7 +84,7 @@ export function createModalPanel(scene: Phaser.Scene, options: ModalPanelOptions
     options.onClose,
     {
       fontSize: compact ? 14 : 16,
-      fillColor: colors.panel,
+      fillColor: colors.panelAlt,
       pressedColor: colors.panelNeeded,
     },
   );
